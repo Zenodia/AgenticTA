@@ -4,8 +4,8 @@ from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.tools import Tool
 import argparse
-
-async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", save_csv_dir: str ='/workspace/mnt/'):
+import os
+async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", save_csv_dir: str ='/workspace/mnt/', cleanup:bool ):
     """Run the quiz generation pipeline and return its textual output.
 
     Keeps the client connected for the duration of the call using the async context manager.
@@ -32,6 +32,15 @@ async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", 
             text = str(result)
 
         print(f"bash result: {text}")
+        if cleanup :
+            print("starting post clean up operation .... \n")
+            if os.path.exists('/workspace/mnt/output_dir'):
+                shutil.rmtree('/workspace/mnt/output_dir', ignore_errors=False, onerror=None)
+                print("clean up dir : /workspace/mnt/output_dir successfully!\n")
+            if os.path.exists('/workspace/mnt/processed')
+                shutil.rmtree('/workspace/mnt/processed', ignore_errors=False, onerror=None)
+                print("clean up dir : /workspace/mnt/processed successfully \n exiting client !")
+        
         # return the textual result so callers can pipe it into downstream tasks
         return text
         #result = await client.call_tool("tavily_concurrent_search_async", {"search_queries": ["Who is Leonardo Da Vinci?","what is the difference between CPU and GPU?"], "tavily_topic":"general","tavily_days":1})
@@ -51,11 +60,12 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--save_csv_dir",
         type=str,
-        default="/workspace/mnt/",
+        default="/workspace/mnt/",        
         help="The directory to save generated CSV files.",
     )
+    argparse.add_argument("--clean", type=bool, default=True, help="clean up temporary dirs such as /workspace/mnt/output_dir, /workspace/mnt/processed but kept the csv dir")
     args = argparser.parse_args()   
     pdf_file_dir=args.pdf_file_dir
     save_csv_dir=args.save_csv_dir
-    
-    asyncio.run(quiz_generation_client(pdf_file_dir=pdf_file_dir, save_csv_dir=save_csv_dir))
+    cleanup=args.clean
+    asyncio.run(quiz_generation_client(pdf_file_dir=pdf_file_dir, save_csv_dir=save_csv_dir), cleanup)
