@@ -32,6 +32,7 @@ chapter_generation_prompt = """You are an expert in generation short chapter tit
         </RULES>
         
         current input document_summary: {document_summary}
+        document reference id:{doc_id}
         **chapter_title:**\nChapter {chapter_nr}:"""
 
 chapter_generation_prompt_template = ChatPromptTemplate.from_template(chapter_generation_prompt)

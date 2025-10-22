@@ -19,7 +19,7 @@ RUN python -m pip install --upgrade pip
 #RUN pip install opencv-fixer==0.2.5
 #RUN python -c "from opencv_fixer import AutoFix; AutoFix()"
 RUN pip install -U gretel_client datasets langchain-core langgraph langchain-nvidia-ai-endpoints openai langchain-community faiss-gpu-cu12
-RUN pip install jupyterlab fastmcp colorama
+RUN pip install jupyterlab fastmcp colorama markdown
 
 COPY . /workspace
 RUN pip install -r requirements.txt 
