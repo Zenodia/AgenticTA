@@ -37,17 +37,17 @@ def generate_text(prompt, task):
     max_tokens=4096,
     stream=False
     )
-    print(Fore.YELLOW + "completion = \n", completion)
+    #print(Fore.YELLOW + "completion = \n", completion, Fore.RESET)
     output= completion.choices[0].message.content
     return output
 # Generate original text
 original = generate_text(base_prompt, task)
-print("#######################Original output:", original)
+print("#######################Original output:\n", original)
 
 # Save feedback for the task
 feedback = "Keep it under 100 words and focus on benefits not features"
 learner.save_feedback(task, feedback)
-
+print("---"*20)
 # Apply feedback to the prompt
 enhanced_prompt = learner.apply_feedback(task, base_prompt)
 enhanced = generate_text(enhanced_prompt, task)
