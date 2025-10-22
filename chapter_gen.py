@@ -7,6 +7,8 @@ from colorama import Fore
 import concurrent.futures
 import os,json
 import argparse
+from dotenv import load_dotenv
+load_dotenv()
 
 llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
 
@@ -31,8 +33,7 @@ chapter_generation_prompt = """You are an expert in generation short chapter tit
         3. you will condense the provided summary into one bery short sentence appropriate for a title 
         </RULES>
         
-        current input document_summary: {document_summary}
-        document reference id:{doc_id}
+        current input document_summary: {document_summary}        
         **chapter_title:**\nChapter {chapter_nr}:"""
 
 chapter_generation_prompt_template = ChatPromptTemplate.from_template(chapter_generation_prompt)
@@ -188,4 +189,5 @@ if __name__ == "__main__":
 
     summaries=[summary_1 , summary_2]
     chapters=[1,2]
-    #output = process_parallel_titles(summaries, chapters)
+    output = process_parallel_titles(summaries, chapters)
+    print(type(output), output)

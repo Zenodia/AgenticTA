@@ -5,7 +5,7 @@ from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.tools import Tool
 import argparse
 import os
-async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", save_csv_dir: str ='/workspace/mnt/', cleanup:bool ):
+async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", save_csv_dir: str ='/workspace/mnt/', cleanup:bool =True):
     """Run the quiz generation pipeline and return its textual output.
 
     Keeps the client connected for the duration of the call using the async context manager.
@@ -37,7 +37,7 @@ async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", 
             if os.path.exists('/workspace/mnt/output_dir'):
                 shutil.rmtree('/workspace/mnt/output_dir', ignore_errors=False, onerror=None)
                 print("clean up dir : /workspace/mnt/output_dir successfully!\n")
-            if os.path.exists('/workspace/mnt/processed')
+            if os.path.exists('/workspace/mnt/processed'):
                 shutil.rmtree('/workspace/mnt/processed', ignore_errors=False, onerror=None)
                 print("clean up dir : /workspace/mnt/processed successfully \n exiting client !")
         
