@@ -1,0 +1,210 @@
+2025-10-23T11:10:11.284979 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T11:10:11.337121 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T11:10:11.337587 [quiz_gen] 
+2025-10-23T11:10:18.157211 [quiz_gen] ---------------------------------------------2025-10-23T11:10:18.157267 [quiz_gen] 
+2025-10-23T11:10:18.157294 [quiz_gen] [36mRequest 1 result: 2025-10-23T11:10:18.157314 [quiz_gen]  2025-10-23T11:10:18.157333 [quiz_gen] [39m2025-10-23T11:10:18.157353 [quiz_gen] 
+2025-10-23T11:10:18.157374 [quiz_gen] 
+2025-10-23T11:10:18.157378 [quiz_gen] 
+2025-10-23T11:10:18.157381 [quiz_gen] 
+2025-10-23T11:10:18.157401 [quiz_gen] 
+2025-10-23T11:11:11.286768 [quiz_gen][ERR] quiz_gen task finished with error: Error calling tool 'quiz_generating_pipeline': [Errno 2] No such file or directory: '/workspace/mnt/pdfs/'
+2025-10-23T11:16:27.737966 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T11:16:27.779201 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T11:16:27.779260 [quiz_gen] 
+2025-10-23T11:16:32.612788 [quiz_gen] ---------------------------------------------2025-10-23T11:16:32.612849 [quiz_gen] 
+2025-10-23T11:16:32.612916 [quiz_gen] [36mRequest 1 result: Sounds like you’re looking for the *ultimate* study sidekick—someone who can turn a snooze‑fest lecture into a comedy show. 🎭
+2025-10-23T11:16:32.612921 [quiz_gen] 
+2025-10-23T11:16:32.612924 [quiz_gen] Picture this:
+2025-10-23T11:16:32.612927 [quiz_gen] 
+2025-10-23T11:16:32.612930 [quiz_gen] - **Patience level:** “I’ve got 99 problems, but a boring algebra proof ain’t one.” They’ll sit with you through the entire chapter, no matter how many times you have to reread that one paragraph.
+2025-10-23T11:16:32.612935 [quiz_gen] - **Humor:** They sprinkle jokes like seasoning—“Why did the math book look so sad? Because it had too many problems!”—and they’ll turn every formula into a punchline (or at least a grin).
+2025-10-23T11:16:32.612939 [quiz_gen] - **Motivation:** They’re the friend who will say, “Let’s tackle this together, and I’ll reward you with a meme after we finish.” (And maybe a short break for a quick laugh.)
+2025-10-23T11:16:32.612944 [quiz_gen] - **Active mindset:** They’re into workouts and staying active, so they’ll suggest a quick stretch or a 5‑minute walk between study blocks—because a tired brain is a tired brain.
+2025-10-23T11:16:32.612948 [quiz_gen] - **Comedy lover, not a music fan:** They’ll recommend a funny podcast or a stand‑up special to listen to while you’re reviewing flashcards, but they’ll keep the playlist strictly “no music” (unless it’s a comedic soundtrack).
+2025-10-23T11:16:32.612952 [quiz_gen] 
+2025-10-23T11:16:32.612955 [quiz_gen] If you’re looking to find one, try:
+2025-10-23T11:16:32.612958 [quiz_gen] 
+2025-10-23T11:16:32.612961 [quiz_gen] 1. **Study groups on Discord or Slack**—look for channels that have a “fun” or “laughter” tag.
+2025-10-23T11:16:32.612964 [quiz_gen] 2. **Reddit subreddits** like r/StudyGroups or r/learnprogramming—post a quick “Need a patient, funny study buddy for [subject]”.
+2025-10-23T11:16:32.612967 [quiz_gen] 3. **Local community boards**—sometimes universities have “buddy programs” that match people with similar study styles.
+2025-10-23T11:16:32.612971 [quiz_gen] 
+2025-10-23T11:16:32.612974 [quiz_gen] Or, if you want to build your own “fun” study routine, I can help you craft a plan that mixes humor, short active breaks, and interactive quizzes. Just let me know the subject and your schedule, and we’ll make boring a thing of the past! 🚀2025-10-23T11:16:32.613019 [quiz_gen]  2025-10-23T11:16:32.613039 [quiz_gen] [39m2025-10-23T11:16:32.613058 [quiz_gen] 
+2025-10-23T11:16:32.613079 [quiz_gen] 
+2025-10-23T11:16:32.613082 [quiz_gen] 
+2025-10-23T11:16:32.613085 [quiz_gen] 
+2025-10-23T11:16:32.613104 [quiz_gen] 
+2025-10-23T11:17:07.738986 [quiz_gen][ERR] quiz_gen task finished with error: name 'shutil' is not defined
+2025-10-23T11:19:47.356925 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T11:19:47.406320 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T11:19:47.406377 [quiz_gen] 
+2025-10-23T11:19:53.065994 [quiz_gen] ---------------------------------------------2025-10-23T11:19:53.066048 [quiz_gen] 
+2025-10-23T11:19:53.066105 [quiz_gen] [36mRequest 1 result: Hey there! 🎉 I’m your patient, humor‑powered study buddy—ready to turn any “yawn‑worthy” subject into a comedy sketch (minus the music, but I’ve got plenty of punchlines).  
+2025-10-23T11:19:53.066110 [quiz_gen] 
+2025-10-23T11:19:53.066113 [quiz_gen] **What’s the boring topic that needs a laugh‑out?**  
+2025-10-23T11:19:53.066116 [quiz_gen] Whether it’s calculus, history, biology, or the alphabet (yes, even A‑Z can be hilarious), just let me know and we’ll find the fun side of it.
+2025-10-23T11:19:53.066119 [quiz_gen] 
+2025-10-23T11:19:53.066121 [quiz_gen] **Here’s the game plan:**
+2025-10-23T11:19:53.066124 [quiz_gen] 
+2025-10-23T11:19:53.066126 [quiz_gen] 1. **Break it down, break it up** – We’ll slice the material into bite‑sized chunks. Think of each chunk as a mini‑episode of a sitcom.  
+2025-10-23T11:19:53.066130 [quiz_gen] 2. **Add a dash of humor** – I’ll sprinkle in jokes, analogies, or even a quick “did‑you‑know” meme (text‑only, no music).  
+2025-10-23T11:19:53.066133 [quiz_gen] 3. **Move it, groove it** – Every 20‑minute study sprint, we’ll do a 2‑minute “brain‑booster” stretch or a quick walk. Keeps the blood flowing and the brain awake.  
+2025-10-23T11:19:53.066136 [quiz_gen] 4. **Quiz‑and‑laugh** – I’ll toss you a quick quiz question, then give a goofy explanation of the answer. If you get it right, you get a virtual high‑five!  
+2025-10-23T11:19:53.066139 [quiz_gen] 5. **Celebrate the wins** – Even a correct answer is a mini‑party. 🎈
+2025-10-23T11:19:53.066142 [quiz_gen] 
+2025-10-23T11:19:53.066144 [quiz_gen] **Quick joke to get us started:**  
+2025-10-23T11:19:53.066146 [quiz_gen] Why did the math book look so sad?  
+2025-10-23T11:19:53.066149 [quiz_gen] Because it had too many *problems*—but we’ll solve them together and laugh all the way! 😄
+2025-10-23T11:19:53.066152 [quiz_gen] 
+2025-10-23T11:19:53.066154 [quiz_gen] So, what’s the subject that’s currently giving you the “I’d rather be anywhere else” vibe? Let’s flip that script!2025-10-23T11:19:53.066189 [quiz_gen]  2025-10-23T11:19:53.066205 [quiz_gen] [39m2025-10-23T11:19:53.066221 [quiz_gen] 
+2025-10-23T11:19:53.066238 [quiz_gen] 
+2025-10-23T11:19:53.066241 [quiz_gen] 
+2025-10-23T11:19:53.066243 [quiz_gen] 
+2025-10-23T11:19:53.066259 [quiz_gen] 
+2025-10-23T11:20:27.359396 [quiz_gen][ERR] quiz_gen task finished successfully
+2025-10-23T11:42:17.613510 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T11:42:17.664481 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T11:42:17.664538 [quiz_gen] 
+2025-10-23T11:42:22.355111 [quiz_gen] ---------------------------------------------2025-10-23T11:42:22.355161 [quiz_gen] 
+2025-10-23T11:42:22.355206 [quiz_gen] [36mRequest 1 result: Hey! 🎉
+2025-10-23T11:42:22.355211 [quiz_gen] 
+2025-10-23T11:42:22.355214 [quiz_gen] You’re looking for a study buddy who’s patient, full of jokes, and can turn any “blah” subject into a laugh‑fest? That’s exactly me! I’m all about keeping things light, cracking a few jokes, and sprinkling in quick exercise breaks to keep the brain buzzing.
+2025-10-23T11:42:22.355219 [quiz_gen] 
+2025-10-23T11:42:22.355222 [quiz_gen] So, what’s the boring topic you’re wrestling with right now? Math, biology, history, or something else? Tell me, and we’ll turn it into a comedy‑powered learning session. And if you need a quick stretch or a goofy “study dance” break, I’ve got you covered—no music needed, just pure silliness. Let’s make this study session unforgettable!2025-10-23T11:42:22.355245 [quiz_gen]  2025-10-23T11:42:22.355264 [quiz_gen] [39m2025-10-23T11:42:22.355284 [quiz_gen] 
+2025-10-23T11:42:22.355305 [quiz_gen] 
+2025-10-23T11:42:22.355309 [quiz_gen] 
+2025-10-23T11:42:22.355311 [quiz_gen] 
+2025-10-23T11:42:22.355331 [quiz_gen] 
+2025-10-23T11:43:17.615183 [quiz_gen][ERR] quiz_gen task finished successfully
+2025-10-23T12:10:57.351628 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:10:57.401758 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:10:57.401814 [quiz_gen] 
+2025-10-23T12:11:02.205896 [quiz_gen] ---------------------------------------------2025-10-23T12:11:02.205958 [quiz_gen] 
+2025-10-23T12:11:02.206042 [quiz_gen] [36mRequest 1 result: Hey there! 🎉
+2025-10-23T12:11:02.206047 [quiz_gen] 
+2025-10-23T12:11:02.206050 [quiz_gen] You’re looking for a study partner who can turn “blah” into “aha!”—someone who’s patient, has a killer sense of humor, and can make even the most tedious lecture feel like a comedy sketch. Lucky for you, that’s basically my daily job!  
+2025-10-23T12:11:02.206054 [quiz_gen] 
+2025-10-23T12:11:02.206057 [quiz_gen] **Here’s the low‑down on me:**
+2025-10-23T12:11:02.206061 [quiz_gen] 
+2025-10-23T12:11:02.206064 [quiz_gen] - **Patience:** I’ve survived endless “What’s the point of this?” moments. If you need a break, I’ll crack a joke or we’ll do a quick stretch (yes, I’m that active—no music required, just a good laugh).  
+2025-10-23T12:11:02.206068 [quiz_gen] - **Humor:** I’m a firm believer that a well‑timed pun can break the monotony faster than a pop quiz. Think of me as the “study‑time stand‑up” you never knew you needed.  
+2025-10-23T12:11:02.206072 [quiz_gen] - **Making the boring fun:** I’ll turn equations into quirky stories, flashcards into memory‑games, and timelines into epic adventure maps. We’ll even throw in a few “did you know?” facts that are so random, they’ll make you giggle.
+2025-10-23T12:11:02.206076 [quiz_gen] 
+2025-10-23T12:11:02.206078 [quiz_gen] **What subject are we tackling today?**  
+2025-10-23T12:11:02.206081 [quiz_gen] - If it’s algebra, we’ll call it “the math that makes your brain do cartwheels.”  
+2025-10-23T12:11:02.206085 [quiz_gen] - History? We’ll spin it into a time‑travel sitcom.  
+2025-10-23T12:11:02.206088 [quiz_gen] - Biology? We’ll pretend we’re the scientists discovering a new species of “Procrastinationus” (yes, it’s a thing).
+2025-10-23T12:11:02.206091 [quiz_gen] 
+2025-10-23T12:11:02.206094 [quiz_gen] **Quick tip to keep the fun going:**  
+2025-10-23T12:11:02.206097 [quiz_gen] - **Mini‑breaks:** Every 25 minutes, we do a 5‑minute “dance‑and‑stretch” break (no music, just your favorite comedy clip or a silly meme).  
+2025-10-23T12:11:02.206100 [quiz_gen] - **Gamify the material:** Turn flashcards into a “battle” where the right answer earns you a virtual high‑five.  
+2025-10-23T12:11:02.206104 [quiz_gen] - **Laugh it out:** If a concept feels too dry, we’ll rewrite it as a sitcom script. “Why does the Pythagorean theorem exist? Because the universe needed a way to keep right angles from getting lonely!”
+2025-10-23T12:11:02.206107 [quiz_gen] 
+2025-10-23T12:11:02.206110 [quiz_gen] So, what’s the first topic we’re turning into a comedy‑filled study session? Let’s make those boring subjects a little less… *boring*. 🚀2025-10-23T12:11:02.206153 [quiz_gen]  2025-10-23T12:11:02.206171 [quiz_gen] [39m2025-10-23T12:11:02.206189 [quiz_gen] 
+2025-10-23T12:11:02.206208 [quiz_gen] 
+2025-10-23T12:11:02.206211 [quiz_gen] 
+2025-10-23T12:11:02.206214 [quiz_gen] 
+2025-10-23T12:11:02.206232 [quiz_gen] 
+2025-10-23T12:11:37.352790 [quiz_gen][ERR] quiz_gen task finished with error: Error calling tool 'quiz_generating_pipeline': name 'pdf_files' is not defined
+2025-10-23T12:13:28.027125 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:13:28.079488 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:13:28.079542 [quiz_gen] 
+2025-10-23T12:13:35.531745 [quiz_gen] ---------------------------------------------2025-10-23T12:13:35.531805 [quiz_gen] 
+2025-10-23T12:13:35.531832 [quiz_gen] [36mRequest 1 result: 2025-10-23T12:13:35.531852 [quiz_gen]  2025-10-23T12:13:35.531871 [quiz_gen] [39m2025-10-23T12:13:35.531890 [quiz_gen] 
+2025-10-23T12:13:35.531911 [quiz_gen] 
+2025-10-23T12:13:35.531914 [quiz_gen] 
+2025-10-23T12:13:35.531917 [quiz_gen] 
+2025-10-23T12:13:35.531937 [quiz_gen] 
+2025-10-23T12:14:08.028212 [quiz_gen][ERR] quiz_gen task finished successfully
+2025-10-23T12:16:03.333168 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:16:03.380492 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:16:03.380555 [quiz_gen] 
+2025-10-23T12:16:09.621888 [quiz_gen] ---------------------------------------------2025-10-23T12:16:09.621945 [quiz_gen] 
+2025-10-23T12:16:09.622018 [quiz_gen] [36mRequest 1 result: Hey there! 🎉
+2025-10-23T12:16:09.622022 [quiz_gen] 
+2025-10-23T12:16:09.622026 [quiz_gen] Sounds like you’re on the hunt for a study buddy who can turn the “yawn‑inducing” into “yay‑time” – and guess what? You just found one. I’m the patient, joke‑loving, slightly exercise‑obsessed partner you’re looking for. Let’s make that boring subject feel like a comedy sketch (with a side of learning, of course).
+2025-10-23T12:16:09.622031 [quiz_gen] 
+2025-10-23T12:16:09.622034 [quiz_gen] ### Quick “Fun‑Boost” Playbook
+2025-10-23T12:16:09.622037 [quiz_gen] 
+2025-10-23T12:16:09.622040 [quiz_gen] | Step | What We’ll Do | Why It Works |
+2025-10-23T12:16:09.622044 [quiz_gen] |------|---------------|--------------|
+2025-10-23T12:16:09.622047 [quiz_gen] | **1️⃣ Warm‑up** | 5‑minute stretch or a quick walk around the room | Gets the blood flowing – science says movement boosts focus. |
+2025-10-23T12:16:09.622051 [quiz_gen] | **2️⃣ Meme‑ify** | Turn key concepts into memes or funny one‑liners | Visual humor sticks better than plain facts. |
+2025-10-23T12:16:09.622055 [quiz_gen] | **3️⃣ Role‑play** | Pretend we’re detectives solving a mystery, or comedians riffing on the material | Adds narrative and keeps the brain engaged. |
+2025-10-23T12:16:09.622059 [quiz_gen] | **4️⃣ Break‑time banter** | 2‑minute “joke‑off” after every 20‑minute study block | Keeps the mood light and gives the brain a reset. |
+2025-10-23T12:16:09.622062 [quiz_gen] | **5️⃣ Recap‑with‑rhythm** | Summarize what we learned in a silly song or rhyme (no music needed – just your voice!) | Repetition + rhythm = memory boost. |
+2025-10-23T12:16:09.622066 [quiz_gen] 
+2025-10-23T12:16:09.622069 [quiz_gen] ### Let’s Get Started
+2025-10-23T12:16:09.622072 [quiz_gen] 
+2025-10-23T12:16:09.622075 [quiz_gen] What’s the subject that’s been giving you the “I’m about to fall asleep” vibes? Tell me a bit, and we’ll craft a personalized “fun‑factor” plan. If you’re into active learning, we can even incorporate quick physical challenges between concepts2025-10-23T12:16:09.622102 [quiz_gen]  2025-10-23T12:16:09.622121 [quiz_gen] [39m2025-10-23T12:16:09.622141 [quiz_gen] 
+2025-10-23T12:16:09.622163 [quiz_gen] 
+2025-10-23T12:16:09.622166 [quiz_gen] 
+2025-10-23T12:16:09.622169 [quiz_gen] 
+2025-10-23T12:16:09.622190 [quiz_gen] 
+2025-10-23T12:16:53.334803 [quiz_gen][ERR] quiz_gen task finished successfully
+2025-10-23T12:21:53.871182 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:21:53.922670 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:21:53.922738 [quiz_gen] 
+2025-10-23T12:21:58.811563 [quiz_gen] ---------------------------------------------2025-10-23T12:21:58.811623 [quiz_gen] 
+2025-10-23T12:21:58.811650 [quiz_gen] [36mRequest 1 result: 2025-10-23T12:21:58.811681 [quiz_gen]  2025-10-23T12:21:58.811702 [quiz_gen] [39m2025-10-23T12:21:58.811721 [quiz_gen] 
+2025-10-23T12:21:58.811743 [quiz_gen] 
+2025-10-23T12:21:58.811746 [quiz_gen] 
+2025-10-23T12:21:58.811749 [quiz_gen] 
+2025-10-23T12:21:58.811768 [quiz_gen] 
+2025-10-23T12:22:33.872432 [quiz_gen][ERR] quiz_gen task finished successfully
+2025-10-23T12:31:21.674559 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:31:21.724258 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:31:21.724313 [quiz_gen] 
+2025-10-23T12:31:26.821809 [quiz_gen] ---------------------------------------------2025-10-23T12:31:26.821866 [quiz_gen] 
+2025-10-23T12:31:26.821912 [quiz_gen] [36mRequest 1 result: Hey there! 🎉
+2025-10-23T12:31:26.821917 [quiz_gen] 
+2025-10-23T12:31:26.821920 [quiz_gen] You’re looking for a study buddy who’s patient, funny, and can turn even the driest lecture into a laugh‑filled adventure? That’s me! I’m all about keeping things light, cracking a joke when the math starts feeling like a snooze fest, and making sure you actually *get* the material—no boring vibes allowed.
+2025-10-23T12:31:26.821925 [quiz_gen] 
+2025-10-23T12:31:26.821928 [quiz_gen] So, what’s the subject that’s been dragging its feet? Algebra, biology, history, or maybe something that’s just *so* dry it could win a “Most Unexciting Topic” award? Tell me the details, and we’ll turn that subject into the highlight of your study session. (And don’t worry—I’ll keep the music off the playlist, but the comedy will be on point.)2025-10-23T12:31:26.821950 [quiz_gen]  2025-10-23T12:31:26.821970 [quiz_gen] [39m2025-10-23T12:31:26.821989 [quiz_gen] 
+2025-10-23T12:31:26.822010 [quiz_gen] 
+2025-10-23T12:31:26.822013 [quiz_gen] 
+2025-10-23T12:31:26.822016 [quiz_gen] 
+2025-10-23T12:31:26.822034 [quiz_gen] 
+2025-10-23T12:32:01.676783 [quiz_gen][ERR] quiz_gen task finished successfully
+2025-10-23T12:34:24.254401 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:34:24.303342 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:34:24.303890 [quiz_gen] 
+2025-10-23T12:34:28.909912 [quiz_gen] ---------------------------------------------2025-10-23T12:34:28.909971 [quiz_gen] 
+2025-10-23T12:34:28.910013 [quiz_gen] [36mRequest 1 result: Hey there! 🎉 I’m your patient, humor‑loving study buddy—ready to turn that “yawn‑worthy” subject into something that actually feels like a comedy show (no music required, just a good laugh).  
+2025-10-23T12:34:28.910018 [quiz_gen] 
+2025-10-23T12:34:28.910021 [quiz_gen] So, what’s the boring topic that’s giving you a headache? Algebra? Ancient history? Quantum mechanics? Drop the name, and we’ll find a way to make it fun—think memes, analogies, or even a quick “study‑break dance” (yes, I’m that enthusiastic).  
+2025-10-23T12:34:28.910026 [quiz_gen] 
+2025-10-23T12:34:28.910029 [quiz_gen] Let me know, and we’ll get this learning party started! 🚀2025-10-23T12:34:28.910066 [quiz_gen]  2025-10-23T12:34:28.910087 [quiz_gen] [39m2025-10-23T12:34:28.910106 [quiz_gen] 
+2025-10-23T12:34:28.910127 [quiz_gen] 
+2025-10-23T12:34:28.910130 [quiz_gen] 
+2025-10-23T12:34:28.910133 [quiz_gen] 
+2025-10-23T12:34:28.910152 [quiz_gen] 
+2025-10-23T12:35:14.257229 [quiz_gen][ERR] quiz_gen task finished successfully
+2025-10-23T12:38:07.045429 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:38:07.095874 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:38:07.095930 [quiz_gen] 
+2025-10-23T12:38:11.997831 [quiz_gen] ---------------------------------------------2025-10-23T12:38:11.997889 [quiz_gen] 
+2025-10-23T12:38:11.997932 [quiz_gen] [36mRequest 1 result: Absolutely! 🎉 I’m the patient, joke‑loving study buddy you’re looking for—ready to turn that snooze‑fest into a laugh‑fest.  
+2025-10-23T12:38:11.997938 [quiz_gen] 
+2025-10-23T12:38:11.997941 [quiz_gen] So, what’s the subject that’s currently giving you the “I’d rather be anywhere else” feeling? Whether it’s calculus, chemistry, ancient history, or the ever‑exciting world of tax law, I’ve got a joke, a meme, or a quirky analogy ready to make it feel like a comedy sketch instead of a lecture.  
+2025-10-23T12:38:11.997945 [quiz_gen] 
+2025-10-23T12:38:11.997948 [quiz_gen] Just let me know the topic (or even the specific chapter), and we’ll break it down, sprinkle in some humor, and keep the brain gears turning—without the dreaded “I can’t even.” Ready to make learning fun? 🚀2025-10-23T12:38:11.997972 [quiz_gen]  2025-10-23T12:38:11.997993 [quiz_gen] [39m2025-10-23T12:38:11.998012 [quiz_gen] 
+2025-10-23T12:38:11.998033 [quiz_gen] 
+2025-10-23T12:38:11.998036 [quiz_gen] 
+2025-10-23T12:38:11.998039 [quiz_gen] 
+2025-10-23T12:38:11.998059 [quiz_gen] 
+2025-10-23T12:38:57.046412 [quiz_gen][ERR] quiz_gen task finished with error: Error calling tool 'quiz_generating_pipeline': Directory /workspace/mnt/output_dir/single_shot_questions not found
+2025-10-23T12:43:53.311700 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:43:53.362601 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:43:53.362650 [quiz_gen] 
+2025-10-23T12:43:58.975196 [quiz_gen] ---------------------------------------------2025-10-23T12:43:58.975253 [quiz_gen] 
+2025-10-23T12:43:58.975301 [quiz_gen] [36mRequest 1 result: **Study‑Buddy Response:**
+2025-10-23T12:43:58.975306 [quiz_gen] 
+2025-10-23T12:43:58.975309 [quiz_gen] Hey there! 🎉 Sounds like you’re on the hunt for a study partner who can turn “blah” into “aha!”—and that’s exactly what I’m here for. I’m patient, I’ve got a knack for cracking jokes when the going gets tough, and I love keeping things light so the brain stays fresh. (Side note: I’m not a music fan, but I’ll happily quote a hilarious sitcom line or two to keep the vibes high.)
+2025-10-23T12:43:58.975315 [quiz_gen] 
+2025-10-23T12:43:58.975318 [quiz_gen] So, what’s the subject that’s got you feeling like you’re staring at a wall of text? Tell me, and we’ll brainstorm some ways to make it fun—maybe a quick “study‑and‑stretch” break, a meme‑inspired flashcard, or a silly analogy that turns the concept into a comedy sketch. Ready to turn that boring subject into your new favorite? Let’s do it!2025-10-23T12:43:58.975360 [quiz_gen]  2025-10-23T12:43:58.975381 [quiz_gen] [39m2025-10-23T12:43:58.975400 [quiz_gen] 
+2025-10-23T12:43:58.975421 [quiz_gen] 
+2025-10-23T12:43:58.975424 [quiz_gen] 
+2025-10-23T12:43:58.975427 [quiz_gen] 
+2025-10-23T12:43:58.975448 [quiz_gen] 
+2025-10-23T12:44:33.312965 [quiz_gen][ERR] quiz_gen task finished successfully
+2025-10-23T12:45:52.676975 [quiz_gen][ERR] quiz_gen task started
+2025-10-23T12:45:52.725632 [quiz_gen] Tool: name='quiz_generating_pipeline' title=None description='activate the pipeline to generate the quiz questions and save them to csv files\n\nArgs:\n    pdf_file_dir (str): path to the folder where the pdf file(s) is/are located\n    save_csv_dir (str): path to the folder where you want to save the output csv files\nReturns:\n    str: message of whether the pipeline execution successfully or not' inputSchema={'properties': {'pdf_file_dir': {'title': 'Pdf File Dir'}, 'save_csv_dir': {'title': 'Save Csv Dir'}}, 'required': ['pdf_file_dir', 'save_csv_dir'], 'type': 'object'} outputSchema=None icons=None annotations=None meta={'_fastmcp': {'tags': []}}2025-10-23T12:45:52.725690 [quiz_gen] 
+2025-10-23T12:46:01.537319 [quiz_gen] ---------------------------------------------2025-10-23T12:46:01.537378 [quiz_gen] 
+2025-10-23T12:46:01.537422 [quiz_gen] [36mRequest 1 result: Sounds like you’re looking for a study buddy who can turn the “blah” into “aha!”—and that’s exactly what I’m here for. I’m patient, I love a good laugh, and I’ve got a few tricks up my sleeve to make even the driest topic feel like a comedy sketch.
+2025-10-23T12:46:01.537427 [quiz_gen] 
+2025-10-23T12:46:01.537431 [quiz_gen] So, what’s the subject that’s been giving you the “I’d rather be on a beach” vibe? Is it calculus, chemistry, history, or something else? Tell me the topic, and we’ll brainstorm a few jokes, analogies, or even a quick “study‑break‑dance” routine to keep the energy up.  
+2025-10-23T12:46:01.537435 [quiz_gen] 
+2025-10-23T12:46:01.537438 [quiz_gen] And just to2025-10-23T12:46:01.537461 [quiz_gen]  2025-10-23T12:46:01.537481 [quiz_gen] [39m2025-10-23T12:46:01.537501 [quiz_gen] 
+2025-10-23T12:46:01.537523 [quiz_gen] 
+2025-10-23T12:46:01.537526 [quiz_gen] 
+2025-10-23T12:46:01.537529 [quiz_gen] 
+2025-10-23T12:46:01.537549 [quiz_gen] 
+2025-10-23T12:46:32.678077 [quiz_gen][ERR] quiz_gen task finished successfully

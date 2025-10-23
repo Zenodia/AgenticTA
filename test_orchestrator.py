@@ -28,7 +28,7 @@ from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe
 
 # Local simple storage for users (JSON file)
-STORE_PATH = Path("/workspace/mnt/_langgraph_store.json")
+STORE_PATH = Path("/workspace/mnt/_GlobalState_store.json")
 USER_STORE_DIR = Path("/workspace/mnt/users")
 USER_STORE_DIR.mkdir(exist_ok=True)
 
@@ -130,31 +130,28 @@ def load_user_state(user_id: str) -> dict:
     return _load_store().get("users", {}).get(user_id)
 
 
-def _build_chapters_from_quiz_output(output_dir) -> typing.List[Chapter]:
+def _build_chapters_from_quiz_output(output_dir:str, pdf_files:str) -> typing.List[Chapter]:
     """Try to reuse the heuristics in helper.extract_summaries_and_chapters
     to create Chapter objects. We'll implement a small local parser here so
     the orchestrator is self-contained.
     """
-    summaries = []
-    if output_dir.endswith(".csv"):
-        csv_file=output_dir
-        df = pd.read_csv(csv_file)            
-        output_ls=df["document_summary"].values.tolist()
-        output=output_ls[0] 
-        f_loc=csv_file
-        if isinstance(output, str):
-            summaries.append([output,f_loc]) # summaries is a list of (summary, f_location including f_name )
-    else:
-        csv_ls=os.listdir(output_dir)
-        summary_csv_ls=[f for f in csv_ls if "summary_" in f and f.endswith(".csv")]        
-        for f in summary_csv_ls: 
-            f_loc=os.path.join(output_dir,f)
-            df = pd.read_csv(f_loc)            
-            output_ls=df["document_summary"].values.tolist()
-            output=output_ls[0] 
-            if isinstance(output, str):
-                summaries.append([output,f_loc]) # summaries is a list of (summary, f_location including f_name )
+    if ',' in pdf_files:
+        pdf_files=[f for f in pdf_files.split(',')]
     
+    summaries = None
+
+    csv_file=output_dir
+    df = pd.read_csv(csv_file)    
+    if len(df)>1:
+        
+        output_ls=df["document_summary"].values.tolist()
+        summaries=[[output,pdf_file] for (output,pdf_file) in zip(output_ls,pdf_files)]
+        print(Fore.MAGENTA + "multiple pdf files' summaries =\n", summaries , Fore.RESET)
+    else:
+        output=output_ls[0] 
+        summaries=[output,pdf_files] # summaries is a list of (summary, f_location including f_name )
+        print(Fore.MAGENTA + "single pdf files's summaries =\n", summaries , Fore.RESET)
+
     if not summaries :
         print(Fore.RED + "no summaries is extracted, check the quiz generation pipeline errors...", Fore.RESET)
         return []
@@ -206,10 +203,17 @@ def populate_states_for_user(user:User, results: dict) -> dict:
     and persist them in the store. Returns the GlobalState as dict.
     """
     quiz_output = results["quiz_gen"]
-    
+    print(Fore.LIGHTBLUE_EX + "\n quiz_output =\n", type(quiz_output), quiz_output,'\n\n' ,Fore.RESET )
     summary_output_location=quiz_output.split('|')[-1].split(':')[-1]
-    print(Fore.YELLOW+ "quiz_gen output extracting summary_output_location =\n", quiz_output, '\n\n', summary_output_location, Fore.RESET)
-    chapters = _build_chapters_from_quiz_output(summary_output_location)
+    how_many_pdfs=int(quiz_output.split("|")[0].split(':')[-1])
+    if how_many_pdfs >1 :
+        pdf_files=quiz_output.split("|")[1].split(":")[1]
+        
+    else:
+        pdf_files=quiz_output.split("|")[1].split(":")[1]
+    
+    print(Fore.YELLOW+ "quiz_gen output extracting pdf_files and summary_output_location =\n", pdf_files, '\n\n', summary_output_location, Fore.RESET)
+    chapters = _build_chapters_from_quiz_output(summary_output_location, pdf_files)
     study_plan = StudyPlan(study_plan=chapters)
     if len(chapters) == 1:
         curriculum = Curriculum(active_chapter=chapters[0], study_plan=study_plan, status=Status.PROGRESSING)
@@ -286,7 +290,7 @@ if __name__ == "__main__":
     parser.add_argument("user_id", nargs="?", default="babe")
     parser.add_argument("preference", nargs="?", default="someone who has patience, a good sense of humor, can make boring subject fun.")
     parser.add_argument("study_buddy_name", nargs="?", default="Ollie")
-    parser.add_argument("pdf_loc", nargs="?", default="/workspace/mnt/pdf/")
+    parser.add_argument("pdf_loc", nargs="?", default="/workspace/mnt/pdfs/")
     parser.add_argument("save_to", nargs="?", default="/workspace/mnt/")
     args = parser.parse_args()
     u=User(

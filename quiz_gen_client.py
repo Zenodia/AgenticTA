@@ -4,6 +4,7 @@ from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.tools import Tool
 import argparse
+import shutil
 import os
 async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", save_csv_dir: str ='/workspace/mnt/', cleanup:bool =True):
     """Run the quiz generation pipeline and return its textual output.
