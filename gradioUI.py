@@ -47,20 +47,20 @@ def generate_curriculum(file_obj):
     """Generate curriculum from uploaded PDF or use sample data"""
     print(Fore.CYAN + "file_objs = \n", type(file_obj), file_obj)
 
-    if file_obj:
-        os.makedirs("/workspace/mnt/pdf/", exist_ok=True)
+    if file_obj:       
+        
         # In a real app, you would extract content from PDF here
         # For demo, we'll just return sample curriculum
-        new_ls=[shutil.copy(f, "/workspace/mnt/pdf/") for f in file_obj]
+        new_ls=[shutil.copy(f, "/workspace/mnt/pdfs/") for f in file_obj]
         print(Fore.CYAN + "new_ls =\n", new_ls)
-        print(os.listdir("/workspace/mnt/pdf/"), Fore.RESET)
+        print(os.listdir("/workspace/mnt/pdfs/"), Fore.RESET)
         u=User(
         user_id="user",
         study_buddy_preference="someone who has patience, a good sense of humor, can make boring subject fun.", 
         study_buddy_name="ollie", 
         study_buddy_persona=None,
         )
-        uploaded_pdf_loc="/workspace/mnt/pdf/"
+        uploaded_pdf_loc="/workspace/mnt/pdfs/"
         save_to="/workspace/mnt/"
         g = run_for_user(u,uploaded_pdf_loc,save_to)
         #print(Fore.YELLOW + "gstate=\n", type(g),g)

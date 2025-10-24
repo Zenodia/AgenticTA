@@ -24,6 +24,16 @@ colorama.init(autoreset=True)
 ORIGINAL_STDOUT = sys.stdout
 ORIGINAL_STDERR = sys.stderr
 
+# Force all per-task logs into a single directory and ensure it exists.
+# This prevents malformed filenames when callers use keys that include
+# path-like content (e.g. "quiz_/workspace/mnt/pdfs/SwedenFacts").
+LOG_DIR = "/workspace/mnt/logs"
+try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+except Exception:
+    # best-effort, if we can't create the directory, fall back to CWD
+    LOG_DIR = "."
+
 
 def run_python_script(script_path: str, *script_args) -> int:
     """Run an external Python script using the same Python interpreter.
@@ -114,9 +124,22 @@ def run_together(tasks: typing.Dict[typing.Hashable, tuple],
 
     def save_results(task_spec, key):
         def wrapped(*args, **kwargs):
-            # open a per-task log file
-            task_log_path = f"{key}_log.txt"
-            task_log_file = open(task_log_path, "a", encoding="utf-8")
+            # open a per-task log file inside LOG_DIR and sanitize the key so
+            # keys that contain path separators don't create nested paths.
+            safe_key = str(key).replace(os.sep, "_").replace("/", "_").lstrip("_")
+            if not safe_key:
+                safe_key = "task"
+            task_log_path = os.path.join(LOG_DIR, f"{safe_key}_log.txt")
+            try:
+                task_log_file = open(task_log_path, "a", encoding="utf-8")
+            except FileNotFoundError:
+                # try to create the directory and reopen
+                try:
+                    os.makedirs(LOG_DIR, exist_ok=True)
+                except Exception:
+                    # fallback to current directory
+                    task_log_path = f"{safe_key}_log.txt"
+                task_log_file = open(task_log_path, "a", encoding="utf-8")
             # prepare prefixed stream objects for stdout/stderr pointing to task-specific file
             stdout_stream = StreamToLog(task_log_file, log_lock, f"[{key}] ")
             stderr_stream = StreamToLog(task_log_file, log_lock, f"[{key}][ERR] ")
@@ -261,24 +284,23 @@ if __name__ == "__main__":
     # start `chapter_gen` here because it must wait for `quiz_gen` to finish and
     # provide its output.
     save_logs = True  # set to False to disable log saving
-    tasks = {
-        "study_buddy": (
-            study_buddy_client_requests,
-            "someone who has a good sense of humor, and can make funny joke out of the boring subject I'd studying",
-        ),
-        "agentic_mem": (
-            agentic_mem_mcp_client,
+    pdf_files=os.listdir(uploaded_pdf_loc)
+    pdf_files=[f for f in pdf_files if f.endswith('.pdf')]
+    """
+    tasks={}
+    if len(pdf_files) >1:
+        for pdf_file in pdf_files:
+            pdf_file_name=pdf_file.split(".pdf")[0]
+            save_to_pdf=os.makedirs(os.path.join(save_to, pdf_file_name),exist_ok=True)
+            tasks[f"quiz_{pdf_file_name}"]=(quiz_generation_client, uploaded_pdf_loc, save_to_pdf)
+
+    save_logs = True   
+    ## adding study_buddy client as task 
+    tasks["study_buddy"]= (study_buddy_client_requests,"someone who has a good sense of humor, and can make funny joke out of the boring subject I'd studying")
+    tasks["agentic_mem"]=( agentic_mem_mcp_client,
             "babe",
             "someone who has a good sense of humor, and can make funny joke out of the boring subject I'd studying",
-        ),
-        # quiz_gen will run in parallel with the above, but chapter_gen must wait
-        # for quiz_gen to finish so we only run chapter_gen after collecting quiz output.
-        "quiz_gen": (
-            quiz_generation_client,
-            "/workspace/test_upload/",
-            '/workspace/mnt/',
-        ),
-    }
+        )
 
     # Run parallel tasks and wait for completion. quiz_gen result will be used
     # to invoke chapter generation afterwards.
@@ -293,6 +315,7 @@ if __name__ == "__main__":
 
     # Extract quiz_gen output and try to parse it into summaries and chapter numbers.
     quiz_output = results.get("quiz_gen")
+    """
     #print(Fore.MAGENTA + f"\n\n\n ################ Quiz generation output ################\n{quiz_output}\n" + Fore.RESET)
     # Helper: attempt to extract summaries and chapter numbers from quiz output.
     def extract_summaries_and_chapters(quiz_res):
@@ -348,6 +371,7 @@ if __name__ == "__main__":
             # as a last resort return empty lists
             return [], []
 
+    """
     summaries_for_chapter, chapters_for_chapter = extract_summaries_and_chapters(quiz_output)
 
     # Only run chapter generation if we have summaries to process
@@ -368,3 +392,4 @@ if __name__ == "__main__":
             except Exception as e:
                 print("error occured while deleting log file:", e)
                 pass
+    """

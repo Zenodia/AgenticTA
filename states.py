@@ -34,6 +34,7 @@ class Chapter(BaseModel):
     number : int = Field(description="each chapter is numbered")
     name : str = Field(description="name of this chapter")
     status: Optional[Status] = None
+    sub_topics: Optional[List[str]] = Field(description="list of sub_topics under this chapter")
     material: List[Any] # each studying materails should be in markdown format  
     reference: str = Field(description="name of the PDF document, from which this chapter is derived")    
     quizes : List[dict] # each quiz is a dictionary, user can generate several round of quizes
@@ -194,6 +195,7 @@ if __name__ == "__main__":
         number=1,
         name="Intro to Driving Basics",
         status=Status.STARTED, 
+        sub_topics=[],
         material=[driving_intro] , 
         reference="intro_to_driving.pdf",
         quizes=[quiz_1],
@@ -202,6 +204,7 @@ if __name__ == "__main__":
         number=2,
         name="Getting to know your vehicle",
         status=Status.NA, 
+        sub_topics=[],
         material=[know_ur_car] , 
         reference="know_your_vehicle.pdf", 
         quizes=[quiz_1],
@@ -225,9 +228,9 @@ if __name__ == "__main__":
         node_name="starter_node",
         )
     #print("---"*20)
-    print(" >>>>>>>>>>>>>>>>>>  Global state : <<<<<<<<<<<<< \n\n",c)
+    #print(" >>>>>>>>>>>>>>>>>>  Global state : <<<<<<<<<<<<< \n\n",c)
 
-
+    """
     demo_path = "user_state.json"
     print(f"Saving example user to {demo_path}")
     save_user_to_file(u, demo_path)
@@ -242,3 +245,4 @@ if __name__ == "__main__":
             print("Active chapter name:", ac.name if hasattr(ac, 'name') else ac.get('name'))
     except Exception as e:
         print("Load check error:", e)
+    """
