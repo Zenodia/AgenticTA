@@ -6,7 +6,7 @@ from fastmcp.tools import Tool
 import argparse
 import shutil
 import os
-async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", save_csv_dir: str ='/workspace/mnt/', cleanup:bool =True):
+async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", save_csv_dir: str ='/workspace/mnt/', cleanup:bool =False):
     """Run the quiz generation pipeline and return its textual output.
 
     Keeps the client connected for the duration of the call using the async context manager.
@@ -35,11 +35,13 @@ async def quiz_generation_client(pdf_file_dir: str = "/workspace/test_upload/", 
         print(f"bash result: {text}")
         if cleanup :
             print("starting post clean up operation .... \n")
-            if os.path.exists('/workspace/mnt/output_dir'):
-                shutil.rmtree('/workspace/mnt/output_dir', ignore_errors=False, onerror=None)
+            
+            os.path.join(save_csv_dir, "processed")
+            if os.path.exists(os.path.join(save_csv_dir,'/output_dir')):
+                shutil.rmtree(os.path.join(save_csv_dir, "processed"), ignore_errors=False, onerror=None)
                 print("clean up dir : /workspace/mnt/output_dir successfully!\n")
-            if os.path.exists('/workspace/mnt/processed'):
-                shutil.rmtree('/workspace/mnt/processed', ignore_errors=False, onerror=None)
+            if os.path.exists(os.path.join(save_csv_dir, "output_dir")):
+                shutil.rmtree(os.path.join(save_csv_dir, "output_dir"), ignore_errors=False, onerror=None)
                 print("clean up dir : /workspace/mnt/processed successfully \n exiting client !")
         
         # return the textual result so callers can pipe it into downstream tasks

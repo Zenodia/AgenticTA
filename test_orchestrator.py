@@ -26,7 +26,7 @@ from chapter_gen import process_parallel_titles,post_process_chapter_title
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status
 from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe
-from study_material_gen_agent import fetch_quiz_qa_pairs, sub_chapter_generation
+from study_material_gen_agent import fetch_quiz_qa_pairs, sub_chapter_generation, study_material_gen
 import asyncio
 import concurrent 
 # Local simple storage for users (JSON file)
@@ -144,16 +144,17 @@ async def _build_chapters_from_quiz_output( pdf_files:list[str], quiz_csv_locati
     the orchestrator is self-contained.
     """
         
-    summaries = None
+    summaries = []
     for summary_csv_location, pdf_file in zip(summary_csv_locations, pdf_files):
-    
-        df = pd.read_csv(summary_csv_location)    
+        if os.path.exists(summary_csv_location) :
+            print(Fore.GREEN + f"summary_csv_location ={summary_csv_location} exists, proceeding to read..." , Fore.RESET)
+            df = pd.read_csv(summary_csv_location)    
 
-        output=df["document_summary"].values.tolist()[0]
-        summaries.append([output,pdf_file]) # summaries is a list of (summary, f_location including f_name )
-        print(Fore.MAGENTA + f"pdf_file ={pdf_file} summaries =\n", output , Fore.RESET)
+            output=df["document_summary"].values.tolist()[0]
+            summaries.append([output,pdf_file]) # summaries is a list of (summary, f_location including f_name )
+            print(Fore.MAGENTA + f"pdf_file ={pdf_file} summaries =\n", output , Fore.RESET)
 
-    if not summaries :
+    if len(summaries) ==0:
         print(Fore.RED + "no summaries is extracted, check the quiz generation pipeline errors...", Fore.RESET)
         return []
     else:
@@ -290,11 +291,12 @@ async def populate_states_for_user(user:User, results: dict, pdf_files: list[str
             summary_csv_locations.append(summary_csv_location)
             print(Fore.CYAN + f"\n single_shot_csv_location for {quiz_gen_task} =\n", single_shot_csv_location,'\n\n' ,Fore.RESET )
             quiz_csv_locations.append(single_shot_csv_location)
-    #quiz_csv_locations= [ result[quiz_gen_task].split("|")[-2].split(":")[-1] for quiz_gen_task in quiz_gen_tasks_ls if quiz_gen_task.startswith("quiz_") ]
+    
     
     
     
     print(Fore.YELLOW+ "single shot quiz csv_file_location =\n", quiz_csv_locations, Fore.RESET)
+    print(Fore.YELLOW+ "sumamry csv_file_location =\n", summary_csv_locations, Fore.RESET)
     chapters = await _build_chapters_from_quiz_output(pdf_files, quiz_csv_locations, summary_csv_locations)
     study_plan = StudyPlan(study_plan=chapters)
     if len(chapters) == 1:

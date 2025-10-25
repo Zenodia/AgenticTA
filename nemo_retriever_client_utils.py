@@ -1,6 +1,8 @@
 import aiohttp
 import os 
 import json
+import re
+import base64
 
 IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" #Replace this with the correct IP address
 RAG_SERVER_PORT = "8081"
@@ -43,7 +45,7 @@ async def get_documents(query):
     payload={
       "query": query , # replace with your own query 
       "reranker_top_k": 5,
-      "vdb_top_k": 30,
+      "vdb_top_k": 20,
       "vdb_endpoint": "http://milvus:19530",
       "collection_names": ["zcharpy"], # Multiple collection retrieval can be used by passing multiple collection names
       "messages": [],
@@ -60,6 +62,24 @@ async def get_documents(query):
     return output
 
 
+def is_base64(s):
+    if not s or not isinstance(s, str):
+        return False
+    try:
+        # Try decoding with validation
+        decoded = base64.b64decode(s, validate=True)
+        # Re-encode and compare without padding
+        encoded = base64.b64encode(decoded).decode('utf-8')
+        return encoded.rstrip('=') == s.rstrip('=')
+    except Exception:
+        return False
+
+
+def is_base64_regex(s):
+    pattern = re.compile(r'^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$')
+    return bool(pattern.match(s))
+
+
 def fetch_rag_context(output:str)-> str :
     context_ls=[]
     output_d=json.loads(output)
@@ -73,7 +93,24 @@ def fetch_rag_context(output:str)-> str :
         source_ref=o["metadata"]["content_metadata"]["source_ref"]
         source_ref_w_page= f"{source_ref} page:{str(page_nr)}"
         context=o["content"]
-        context_ls.append(f"context_{str(i)}:\n{context}"+'\n'+ f"source_ref:{source_ref_w_page}")
+        if is_base64_regex(context) or is_base64(context):
+            print("skipping base64 string, which is not actually text content....")
+            try: 
+                table_or_text=o["metadata"]["description"]                
+                context_ls.append(f"extra_info:{table_or_text}")
+            except :
+                pass 
+            
+        else:
+            context_ls.append(f"context:{context}"+'\n'+ f"source_ref:{source_ref_w_page}")
+            try: 
+                table_or_text=o["metadata"]["description"]                
+                context_ls.append(f"extra_info:{table_or_text}")
+            except :
+                pass 
+        ## limit the max content retrieve to top 5
+        if i>=5:
+            break
         i+=1
     return 'n'.join(context_ls)
 

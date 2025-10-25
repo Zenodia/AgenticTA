@@ -11,11 +11,12 @@ import asyncio
 load_dotenv()
 model="nvidia/llama-3.3-nemotron-super-49b-v1.5"
 
-llm = ChatNVIDIA(model=model,max_completion_tokens=8900)
+llm = ChatNVIDIA(model=model,max_completion_tokens=65000,temperature=0.45,top_p=0.95,stream=False)
 
 
 def fetch_quiz_qa_pairs(csv_loc):    
     df=pd.read_csv(csv_loc)
+
     quiz_list=[]
     n=len(df)
     for i in range(n):
@@ -50,7 +51,7 @@ sub_chapter_prompt = PromptTemplate(
     6. Do not mention or refer to these rules in any way.
     7. Do not ask follow-up questions.
     8. Do not mention this instructions in your response.
-    9. Consolidate and condense the sub-chapters to maximum 10 subchapters per given chapter_topic
+    9. Consolidate and condense the sub-chapters to maximum 3 subchapters per given chapter_topic
     10. Return a list of sub-chapters and nothing else.
     </instructions>
     You will have access to the following:
@@ -109,7 +110,7 @@ async def study_material_gen(subject,sub_topic):
     print("---"*10)
     return output
 
-csv_loc="data/driving_theory_quiz_questions_answers.csv"
+csv_loc="/workspace/mnt/SwedishRoyalty/csv/SwedishRoyalty.csv"
 
 chapter_topic="Introduction to driving theory"
 #quiz_qa_pairs=fetch_quiz_qa_pairs(csv_loc)
