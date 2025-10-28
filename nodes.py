@@ -22,11 +22,12 @@ import pandas as pd
 from dataclasses import asdict, dataclass
 from colorama import Fore
 from helper import run_together
-from chapter_gen import process_parallel_titles,post_process_chapter_title
+from chapter_gen_from_file_names import chapter_gen_from_pdfs, parse_output_from_chapters
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status
 from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe
-from study_material_gen_agent import fetch_quiz_qa_pairs, sub_chapter_generation, study_material_gen
+from study_material_gen_agent import study_material_gen
+from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
 import asyncio
 import concurrent 
 # Local simple storage for users (JSON file)
@@ -138,172 +139,84 @@ def load_user_state(user_id: str) -> dict:
     return _load_store().get("users", {}).get(user_id)
 
 
-async def _build_chapters_from_quiz_output( pdf_files:list[str], quiz_csv_locations: list[str], summary_csv_locations:list[str]) -> typing.List[Chapter]:
+def parallel_extract_study_materials(subject, sub_topics, pdf_file, num_docs):   
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # study_materail_create is an async coroutine. Create a small
+        # synchronous wrapper that executes it via `asyncio.run` so the
+        # ThreadPoolExecutor receives a regular callable that returns the
+        # coroutine result (and avoids un-awaited coroutine warnings).
+        def _sync_run(sub_topic):
+            return asyncio.run(study_materail_create(subject, sub_topic, pdf_file, num_docs))
+
+        future_to_study_material = {executor.submit(_sync_run, sub_topic): sub_topic for sub_topic in sub_topics}
+        outputs = []
+        for future in concurrent.futures.as_completed(future_to_study_material):
+            temp = future_to_study_material[future]
+            try:
+                data = future.result()
+                outputs.append(data)
+            except Exception as exc:
+                print('generated an exception: %s' % (exc))
+                outputs.append('')
+            else:
+                try:
+                    print('page is %d bytes' % (len(data)))
+                except Exception:
+                    print('page result length unknown')
+                #outputs.append
+    print(Fore.BLUE +"#### extracted future_to_page_text >>>> ", len(outputs), type(outputs),outputs[-1], Fore.RESET)
+    return outputs
+
+
+async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
     """Try to reuse the heuristics in helper.extract_summaries_and_chapters
     to create Chapter objects. We'll implement a small local parser here so
     the orchestrator is self-contained.
     """
-        
-    summaries = []
-    for summary_csv_location, pdf_file in zip(summary_csv_locations, pdf_files):
-        if os.path.exists(summary_csv_location) :
-            print(Fore.GREEN + f"summary_csv_location ={summary_csv_location} exists, proceeding to read..." , Fore.RESET)
-            df = pd.read_csv(summary_csv_location)    
-
-            output=df["document_summary"].values.tolist()[0]
-            summaries.append([output,pdf_file]) # summaries is a list of (summary, f_location including f_name )
-            print(Fore.MAGENTA + f"pdf_file ={pdf_file} summaries =\n", output , Fore.RESET)
-
-    if len(summaries) ==0:
-        print(Fore.RED + "no summaries is extracted, check the quiz generation pipeline errors...", Fore.RESET)
-        return []
-    else:
-        sumamries_ls=[summary[0] for summary in summaries]  # extract only the summary text
-        chapter_nrs=[i for i in range(len(sumamries_ls))]  # generate chapter numbers based on the number of summaries
-
-        chapter_titles = process_parallel_titles(sumamries_ls, chapter_nrs)        
-        chapter_title_cleaned = post_process_chapter_title(chapter_titles)
-        doc_reference_names = [summary[1] for summary in summaries]  # extract f_location as document reference names
-
-        n=len(doc_reference_names)
     
+    chapter_titles_str = chapter_gen_from_pdfs(pdf_files_loc)
+    chapter_output=parse_output_from_chapters(chapter_titles_str)
+    
+    pdf_files_ls = [os.path.join(pdf_files_loc, item["file_loc"]) for item in chapter_output]
+    chapter_titles_cleaned_ls=[ item["title"] for item in chapter_output]
     chapters=[]
-    for i, s, ref in zip(range(n), chapter_title_cleaned, doc_reference_names):
+    i=0
+    for pdf_loc, chapter_title in zip(pdf_files_ls,chapter_titles_cleaned_ls):
         print(f"....................................... i :{str(i)}...............................")
+        print( "pdf_loc =", pdf_loc , "|" , "chapter_title=",chapter_title)
+        pdf_f_name=pdf_loc.split('/')[-1]
+        subject=pdf_f_name.split('.pdf')[0]
         if i==0:
+            sub_topics = parallel_extract_pdf_page_and_text(pdf_loc)
+            sub_topics_ordered = post_process_extract_sub_chapters(sub_topics)        
             print(Fore.LIGHTGREEN_EX + " creating studying materails for chapter :", i, Fore.RESET)
-            print(Fore.LIGHTGREEN_EX + f"Generating subtopics for chapter {i+1} : {s} ..." , Fore.RESET)
-            sub_topics_ls=generate_subtopics_for_chapter(s, quiz_csv_locations[i])
-            study_materials_ls=[]
-            for sub_topic in sub_topics_ls:
-                study_materials_for_first_chapter = await generate_study_material_for_chapter(s,sub_topic)
-                study_materails_ls.append(study_materials_for_first_chapter)
-            chap = Chapter(number=i+1, name=s, status=Status.NA, sub_topics=sub_topics_ls, material=study_materials_for_first_chapter, reference=ref, quizes=[], feedback=[])
+                                    
+            num_docs=5
+            print("subject =", subject ,"\n sub_topics=\n", sub_topics, "\npdf_f_name=\n", pdf_f_name)
+            # pass the full pdf path (pdf_loc) into the extractor so it can locate the file
+            output_study_material_ls = []
+            for sub_topic in sub_topics:
+                study_material_str = await study_material_gen(subject, sub_topic, pdf_f_name, num_docs)
+            print(Fore.RED + "study_material = \n", study_material_str , '\n' , Fore.RESET)
+            output_study_material_ls.append(study_material_str)
+            print(Fore.BLUE + "type of output_study_material_ls ", type(output_study_material_ls),len(output_study_material_ls), output_study_material_ls[-1])
+            
+            chap = Chapter(number=i, name=chapter_title, status=Status.NA, sub_topics=sub_topics_ordered, material=output_study_material_ls, reference=pdf_f_name, quizes=[], feedback=[])
         else:
-            chap = Chapter(number=i+1, name=s, status=Status.NA,sub_topics=[], material=[], reference=ref, quizes=[], feedback=[])
-            chapters.append(chap)
+            chap = Chapter(number=i, name=chapter_title, status=Status.NA, sub_topics=[], material=[], reference=pdf_f_name, quizes=[], feedback=[])
         
+        chapters.append(chap)
+        i+=1
+    print(Fore.LIGHTGREEN_EX + " how many chapters = \n", len(chapters), chapters, Fore.RESET)
     return chapters
 
-
-def call_helper_clients_for_user(user: User, uploaded_pdf_loc: str, save_to:str ) -> dict:
-    """Use helper.run_together to run the MCP clients in parallel and
-    return their results as a dict.
-    The helper module already imports `quiz_generation_client`, `study_buddy_client_requests`,
-    and `agentic_mem_mcp_client` so we can call them by delegating to run_together.
-    """
-    global quiz_gen_output_files_loc, quiz_gen_tasks_ls, pdf_files
-    print(Fore.GREEN + "user =\n", type(user), user)
-    pdf_files=os.listdir(uploaded_pdf_loc)
-    pdf_files=[os.path.join(uploaded_pdf_loc, f) for f in pdf_files if f.endswith('.pdf')]
-    tasks={}
-    quiz_gen_output_files_loc=[]
-    if len(pdf_files) >1:
-        for pdf_file in pdf_files:
-            pdf_file_name=pdf_file.split('/')[-1].split(".pdf")[0]
-            
-            os.makedirs(os.path.join(save_to, pdf_file_name),exist_ok=True)
-            save_to_pdf=os.path.join(save_to, pdf_file_name)
-            quiz_gen_output_files_loc.append(save_to_pdf)
-            quiz_gen_task_item=f"quiz_{pdf_file_name}"
-            quiz_gen_tasks_ls.append(quiz_gen_task_item)
-            print(Fore.GREEN + f"adding quiz generation task for pdf_file ={pdf_file} saving to {save_to_pdf} ..." , Fore.RESET)
-            tasks[quiz_gen_task_item]=(quiz_generation_client, uploaded_pdf_loc, save_to_pdf)
-
-    save_logs = True   
-    ## adding study_buddy client as task 
-    tasks["study_buddy"]= (study_buddy_client_requests, user["study_buddy_preference"])     
-    
-    results = run_together(tasks)
-
-    # print parallel task results/logs
-    i=0
-    
-    for key, result in results.items():
-        print(f"------------------------------ processing {str(i)} ------------------------------")
-        print(Fore.LIGHTBLUE_EX + f"Result from {key}:\n{result}\n\n")
-        i+=1
-
-    return results, pdf_files
-
-
-def generate_subtopics_for_chapter(chapter_topic:str, quiz_csv_loc:str) -> str:
-    quiz_qa_pairs=fetch_quiz_qa_pairs(quiz_csv_loc)
-    
-    sub_chapters_ls=sub_chapter_generation(chapter_topic,quiz_qa_pairs)
-
-    return sub_chapters_ls
-
-async def generate_study_material_for_chapter(chapter_topic:str, sub_topic:str) -> str:
-    study_material_output=await study_material_gen(chapter_topic, sub_topic)
-    return study_material_output
-
-    
-def pretty_print_study_material_in_markdown(study_material_output:str):
-    markdown_str = markdown.markdown(study_material_output)
-
-    def printmd(markdown_str):
-        display(Markdown(markdown_str))
-    printmd(markdown_str)
-
-
-async def generate_parallel_study_materails(chapter_topic, sub_topics):
-    # Use asyncio tasks rather than ThreadPoolExecutor to correctly await
-    # the async `generate_study_material_for_chapter` coroutine.
-    max_concurrency = 5
-    sem = asyncio.Semaphore(max_concurrency)
-    n=len(sub_topics)
-    
-    async def _worker(subject, subtopic):
-        async with sem:
-            try:
-                result = await generate_study_material_for_chapter(subject, subtopic)
-                try:
-                    print('page is %d bytes' % (len(result)))
-                except Exception:
-                    pass
-                return result
-            except Exception as exc:
-                print('generated an exception: %s' % (exc))
-                return ''
-
-    # create tasks for each subtopic and await them
-    tasks = [asyncio.create_task(_worker(chapter_topic, st)) for st in sub_topics]
-    outputs = await asyncio.gather(*tasks)
-    print("#### the generated study_materials >>>> ", len(outputs))
-    return outputs
-
-
-
-
-async def populate_states_for_user(user:User, results: dict, pdf_files: list[str]) -> dict:
+async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_preference: str) -> dict:
     """Given results from MCP clients, construct Chapter, StudyPlan, Curriculum, User and GlobalState
     and persist them in the store. Returns the GlobalState as dict.
     """
-    ## only populate the 1st chapter's study materials, other chapters will be populated/triggered when user finish the previous chapter in the UI
-    first_chapter_quiz_loc=quiz_gen_tasks_ls[0]
-           
-    quiz_output = results[first_chapter_quiz_loc]
-    print(Fore.LIGHTBLUE_EX + "\n quiz_output =\n", type(quiz_output), quiz_output,'\n\n' ,Fore.RESET )
-    summary_output_location=quiz_output.split('|')[-1].split(':')[-1]
-    quiz_csv_locations=[]
-    summary_csv_locations=[]
-    print(Fore.LIGHTBLUE_EX + "\n quiz_gen_tasks_ls =\n", quiz_gen_tasks_ls,'\n\n' ,Fore.RESET )
-    for quiz_gen_task in quiz_gen_tasks_ls:
-        if quiz_gen_task.startswith("quiz_"):
-            quiz_output = results[quiz_gen_task]
-            single_shot_csv_location=quiz_output.split("|")[-2].split(":")[-1]
-            summary_csv_location=quiz_output.split("|")[-1].split(":")[-1]
-            summary_csv_locations.append(summary_csv_location)
-            print(Fore.CYAN + f"\n single_shot_csv_location for {quiz_gen_task} =\n", single_shot_csv_location,'\n\n' ,Fore.RESET )
-            quiz_csv_locations.append(single_shot_csv_location)
-    
-    
-    
-    
-    print(Fore.YELLOW+ "single shot quiz csv_file_location =\n", quiz_csv_locations, Fore.RESET)
-    print(Fore.YELLOW+ "sumamry csv_file_location =\n", summary_csv_locations, Fore.RESET)
-    chapters = await _build_chapters_from_quiz_output(pdf_files, quiz_csv_locations, summary_csv_locations)
+    chapters = await build_chapters(pdf_files_loc)
+    print(Fore.LIGHTGREEN_EX + "len of chapter is = \n",len(chapters), chapters, '\n\n', Fore.RESET )
     study_plan = StudyPlan(study_plan=chapters)
     if len(chapters) == 1:
         curriculum = Curriculum(active_chapter=chapters[0], study_plan=study_plan, status=Status.PROGRESSING)
@@ -313,11 +226,12 @@ async def populate_states_for_user(user:User, results: dict, pdf_files: list[str
     
     
     # build User Pydantic-compatible dict
-    if "study_buddy" in results:
-        persona = results["study_buddy"]
+    try :
+        persona = await study_buddy_client_requests(query=study_buddy_preference)
         print(Fore.LIGHTBLUE_EX + "persona extracted from study_buddy results =\n", persona , Fore.RESET)
-    else:
-        persona = user["study_buddy_persona"]
+    except :
+        persona = user["study_buddy_preference"]
+    
     #existing = _load_store().get("users", {}).get(user_id, {})
     
     user_dict = {
@@ -347,7 +261,7 @@ async def populate_states_for_user(user:User, results: dict, pdf_files: list[str
     return gstate
 
 
-async def run_for_user(user: User, uploaded_pdf_loc: str, save_to:str) -> dict:
+async def run_for_user(user: User, uploaded_pdf_loc: str, save_to:str, study_buddy_preference: str) -> dict:
     """Main entrypoint: ensure user exists, call helper clients if necessary,
     populate states, and return the GlobalState dict.
     """
@@ -363,12 +277,10 @@ async def run_for_user(user: User, uploaded_pdf_loc: str, save_to:str) -> dict:
         return store["global_states"][user_id]
 
     # First-time population: call helper clients
-    print("Calling helper clients to populate initial state...")
     
-    results , pdf_files = call_helper_clients_for_user(user, uploaded_pdf_loc, save_to)
 
-    print("Populating application states from helper results...")
-    gstate = await populate_states_for_user(user, results, pdf_files)
+    print("Populating application states ...")
+    gstate = await populate_states_for_user(user, uploaded_pdf_loc, study_buddy_preference)
     print("Done. GlobalState created and saved.")
     return gstate
 
@@ -391,6 +303,6 @@ if __name__ == "__main__":
     )
     uploaded_pdf_loc=args.pdf_loc
     save_to=args.save_to
-    g = asyncio.run(run_for_user(u,uploaded_pdf_loc,save_to))
+    g = asyncio.run(run_for_user(u,uploaded_pdf_loc,save_to, args.preference))
     # print a JSON-serializable representation of the user
     print(json.dumps(convert_to_json_safe(u), indent=2, ensure_ascii=False))

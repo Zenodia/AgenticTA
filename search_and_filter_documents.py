@@ -121,18 +121,23 @@ async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : i
         }
         output=await document_seach(payload, url)
     else:
-        output="query is empty, please make sure you input non-empty query"
+        output=None
     
     return output
 
 
 async def filter_documents_by_file_name(query,pdf_file,num_docs):        
     output = await get_documents(query, pdf_file, 3)
-    output_d=json.loads(output)
+    if output :
+        output_d=json.loads(output)
     output_ls =[]
-    for o in output_d["results"]:
-        print( o["document_name"], o["metadata"]["page_number"],'\n', o["metadata"]["description"])
-    return output_d["results"]
+    try :
+        for o in output_d["results"]:
+            print( o["document_name"], o["metadata"]["page_number"],'\n', o["metadata"]["description"])
+        return output_d["results"]
+    except:
+
+        return []
 
 
 def strip_thinking_tag(response):
@@ -192,9 +197,6 @@ if __name__ == "__main__":
     # Move top-level async calls into an async main to avoid 'await outside function'
     query = "fetch information on driving in highway/mortorway"
     pdf_file = "SwedenDrivingCourse_Motorway.pdf"
-    subject=pdf_file.split('.pdf')[0]
-    sub_topic="0: Motorway Characteristics and Usage Restrictions"
-    num_docs=5
-    output=asyncio.run( study_material_gen(subject,sub_topic, pdf_file, num_docs))
-    print(output)
-    #asyncio.run(filter_documents_by_file_name(query,pdf_file,1))
+    
+    
+    asyncio.run(filter_documents_by_file_name(query,pdf_file,1))

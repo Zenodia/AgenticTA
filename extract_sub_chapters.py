@@ -69,7 +69,7 @@ def astra_llm_call(query):
     return output_str
 
 
-chapter_generation_prompt = """You are an expert in generation short chapter title to outline the studying curriculum.
+sub_topics_generation_prompt = """You are an expert in generation short chapter title to outline the studying curriculum.
         You will have access to one summary extracted from the a processed document which user uploaded previously.
 
         You will condense each summary and produce an appropriate title for that particular summary.
@@ -94,12 +94,12 @@ chapter_generation_prompt = """You are an expert in generation short chapter tit
         current input document_summary: {document_summary}        
         **chapter_title:**\n {chapter_nr}:"""
 
-chapter_generation_prompt_template = ChatPromptTemplate.from_template(chapter_generation_prompt)
+sub_topics_generation_prompt_template = ChatPromptTemplate.from_template(sub_topics_generation_prompt)
 
 
-chapter_gen_chain = (
+sub_topics_gen_chain = (
     RunnablePassthrough()    
-    | chapter_generation_prompt_template
+    | sub_topics_generation_prompt_template
     | llm
 )
 
@@ -117,12 +117,12 @@ def get_pdf_pages(pdf_file):
         return None, 0
 
 def title_generator(summary,chapter_nr):
-    query=chapter_generation_prompt.format(document_summary=summary, chapter_nr=chapter_nr)    
+    query=sub_topics_generation_prompt.format(document_summary=summary, chapter_nr=chapter_nr)    
     output=astra_llm_call(query)
     if output :
         return output
     else:
-        output=chapter_gen_chain.invoke({"document_summary":summary,"chapter_nr":chapter_nr})
+        output=sub_topics_gen_chain.invoke({"document_summary":summary,"chapter_nr":chapter_nr})
         output = output.content
         return output
 
@@ -225,7 +225,7 @@ def post_process_extract_sub_chapters(output):
             sub_chapters.append(o[strip_o:])
     ordered_subchapters = sort_list_by_prefix(sub_chapters)
     return ordered_subchapters
-
+"""
 path_to_pdf_file="/workspace/mnt/pdfs/SwedenDriving_intro.pdf"
 output = parallel_extract_pdf_page_and_text(path_to_pdf_file)
 
@@ -236,6 +236,6 @@ for p_text in output:
     print(f" ---------------------- extracted page number: {str(i)} ---------------------------")
     print(p_text)
     i+=1
-print('\n'.join(output))
+print('\n'.join(output))"""
 
 

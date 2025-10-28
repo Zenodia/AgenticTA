@@ -5,13 +5,46 @@ from langchain_core.runnables import RunnablePassthrough
 from operator import itemgetter
 from colorama import Fore
 import concurrent.futures
-import os,json
+import os
+import json
+import requests
 import argparse
 from dotenv import load_dotenv
 from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
 load_dotenv()
+API_KEY=os.environ["ASTRA_TOKEN"]
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': f'Bearer {API_KEY}',
+}
 
 llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
+
+def astra_llm_call(query):
+    json_data = {
+        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
+        'messages': [
+            {
+                'role': 'user',
+                'content': query,
+            },
+        ],
+        'max_tokens': 512,
+        'stream': False,
+    }
+
+    response = requests.post(
+        'https://datarobot.prd.astra.nvidia.com/api/v2/deployments/688e407ed8a8e0543e6d9b80/chat/completions',
+        headers=headers,
+        json=json_data,
+    )
+    try :
+        output=response.json()
+        output_str = output["choices"][0]["message"]["content"]
+    except:
+            output_str=None
+    return output_str
+
 
 
 main_title_generation_prompt = """You are an expert in generation short chapter title to outline the studying curriculum.
@@ -37,7 +70,7 @@ main_title_generation_prompt = """You are an expert in generation short chapter 
         current input sub_chapters: {sub_chapters}        
         **chapter_title:**\n {chapter_nr}:"""
 
-chapter_generation_prompt_template = ChatPromptTemplate.from_template(chapter_generation_prompt)
+chapter_generation_prompt_template = ChatPromptTemplate.from_template(main_title_generation_prompt)
 updated_curriculum_example_1={"Chapter 1: Introduction to Driving":("merged","Chapter 1: Introduction to Driving and Basics"), 
         "Chapter 2: Before You Start Driving":("merged","Chapter 1: Introduction to Driving and Basics"), 
         "Chapter 3: Manual or automatic gearbox":("kept", None), 
@@ -106,7 +139,6 @@ modify_chapter_chain=(
 )
 
 
-
 def parse_modified_curriculum(output):
     if '**updated_curriculum**' in output:
         output=output.replace("**updated_curriculum**","").strip()
@@ -167,16 +199,84 @@ def post_process_chapter_title(output_ls):
         else:
             processed_titles.append(output.strip('\n'))
     return processed_titles
-  
 
-if __name__ == "__main__":
-    #### test examples 
-    summary_1="The document outlines essential safety practices for driving on country roads, emphasizing proactive scanning, speed control, and risk mitigation. Key strategies include maintaining a three-second following distance, regularly checking mirrors in a systematic pattern, and adjusting speed for conditions to avoid ,speed blindness, It details proper positioning for turns (right edge for right turns, center for lefts) and highlights dangers of overtaking and abrupt maneuvers. Technical aspects cover reaction/braking distance calculations, the impact of kinetic energy in crashes, and using roadside reflectors (spaced 50m apart) for distance judgment. The text also addresses parking restrictions, hard shoulder usage, and the importance of avoiding left turns without clear visibility. Overall, it stresses defensive driving techniques to counter higher speeds and reduced friction on rural roads."
-    chapter_r=2
 
-    summary_2="The document outlines critical safety considerations for driving in darkness and low-visibility conditions. It emphasizes heightened risks at night, including reduced visibility (e.g., dark-clothed pedestrians seen only at 25-30 meters with low beams) and statistics showing 2-3x higher accident rates. Key practices include strategic use of headlights (high beams for maximum visibility, low beams to avoid dazzling others), positioning vehicles closer to the center-left lane, and adjusting speed to account for reaction distances. Special guidance addresses fog/snowstorms white wall effect, wildlife risks during dawn/dusk months, and legal lighting requirements (e.g., fog lights, parking lights). The text also highlights the importance of reflectors, avoiding distractions from oncoming headlights, and proper lighting combinations for different scenarios."
+chapter_generation_prompt = """You are an expert in generation short chapter title to outline the studying curriculum.
+    You will have access to user uploaded file names.
 
-    summaries=[summary_1 , summary_2]
-    chapters=[1,2]
-    output = process_parallel_titles(summaries, chapters)
+    You will analyze the file names and re-order them to make this list into a comprehensive study curriculum. 
+
+    <RULEs>
+    You will strictly follow below rules, and in this order, when you produce the chapter titles :        
+    1. you should always mark the beginning of your response with '**curriculum:**\n        
+    2. you will assume that user uploaded documents belong to one study theme
+    3. you will number the re-ordered curriculum with 1., 2., 3. ... and so on.
+    4. you will list the return the study curriculum in JSON format
+        example of JSON format curriculum :
+        1. {{"title": "chapter 1 title" , "file_loc" : "path_to_chapter_1_pdf_file" }}\n\n
+        2. {{"title": "chapter 2 title" , "file_loc" : "path_to_chapter_2_pdf_file" }}\n\n
+    5. return only the curriculum and do not elaborate/explain anything else.
+    </RULES>
+    
+    pdf_file_names: {pdf_file_names}
+    **curriculum:**\n"""
+
+chapter_generation_prompt_template = ChatPromptTemplate.from_template(chapter_generation_prompt)
+
+
+chapter_gen_chain = (
+    RunnablePassthrough()    
+    | chapter_generation_prompt_template
+    | llm
+)
+
+
+def chapter_gen_from_pdfs(pdf_files_loc):
+    pdf_file_names = [f for f in os.listdir(pdf_files_loc) if f.endswith('.pdf')]
+    ordered_chapters_prompt=chapter_generation_prompt.format(pdf_file_names=pdf_file_names)
+    output = astra_llm_call(ordered_chapters_prompt)
+    if output :
+        return output
+    else:
+        output=chapter_gen_chain.invoke({"pdf_file_names":pdf_file_names})
+        output = output.content
+        return output
+
+def parse_output_from_chapters(output:str) -> list[dict]:
+    output = output.replace("**curriculum:**", "").replace("1. ", "").replace("2. ", "").split('\n\n')
     print(type(output), output)
+
+    # Safely attempt to parse each block into JSON. Skip blank/whitespace blocks and log parse errors.
+    parsed_outputs = []
+    for idx, out in enumerate(output):
+        if not out or not out.strip():
+            continue
+        try:
+            parsed = json.loads(out)
+            parsed_outputs.append(parsed)
+        except json.JSONDecodeError as e:
+            print(Fore.RED + f"JSONDecodeError parsing block {idx}: {e}" + Fore.RESET)
+            print(Fore.RED + "Offending block:\n" + out + Fore.RESET)
+            # continue without aborting; append nothing for this 
+            
+            continue
+
+    print(type(parsed_outputs), parsed_outputs)
+    return parsed_outputs
+#### test examples 
+"""
+summary_1="The document outlines essential safety practices for driving on country roads, emphasizing proactive scanning, speed control, and risk mitigation. Key strategies include maintaining a three-second following distance, regularly checking mirrors in a systematic pattern, and adjusting speed for conditions to avoid ,speed blindness, It details proper positioning for turns (right edge for right turns, center for lefts) and highlights dangers of overtaking and abrupt maneuvers. Technical aspects cover reaction/braking distance calculations, the impact of kinetic energy in crashes, and using roadside reflectors (spaced 50m apart) for distance judgment. The text also addresses parking restrictions, hard shoulder usage, and the importance of avoiding left turns without clear visibility. Overall, it stresses defensive driving techniques to counter higher speeds and reduced friction on rural roads."
+chapter_r=2
+
+summary_2="The document outlines critical safety considerations for driving in darkness and low-visibility conditions. It emphasizes heightened risks at night, including reduced visibility (e.g., dark-clothed pedestrians seen only at 25-30 meters with low beams) and statistics showing 2-3x higher accident rates. Key practices include strategic use of headlights (high beams for maximum visibility, low beams to avoid dazzling others), positioning vehicles closer to the center-left lane, and adjusting speed to account for reaction distances. Special guidance addresses fog/snowstorms white wall effect, wildlife risks during dawn/dusk months, and legal lighting requirements (e.g., fog lights, parking lights). The text also highlights the importance of reflectors, avoiding distractions from oncoming headlights, and proper lighting combinations for different scenarios."
+
+summaries=[summary_1 , summary_2]
+chapters=[1,2]
+output = process_parallel_titles(summaries, chapters)
+print(type(output), output)"""
+pdf_files_loc="/workspace/mnt/pdfs/"
+output = chapter_gen_from_pdfs(pdf_files_loc)
+chapter_output=parse_output_from_chapters(output)
+for c in chapter_output:
+    print("---"*10)
+    print(type(c), c)

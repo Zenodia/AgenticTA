@@ -83,12 +83,13 @@ study_material_gen_prompts= PromptTemplate(
 )
 
 async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
-    output = await filter_documents_by_file_name(sub_topic,pdf_file,num_docs)
-    print("\n\n### output.keys=", "\n\n")
-    detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output])
-    study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
-    output=astra_llm_call(study_material_generation_prompt_formatted)
-    if output:        
+    output = await filter_documents_by_file_name(sub_topic,pdf_file_name,num_docs)
+    
+    
+    if len(output)>0:      
+        detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output])
+        study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
+        output=astra_llm_call(study_material_generation_prompt_formatted)  
         print(Fore.BLUE + "using astra llm call > llm parsed relevent_chunks as context output=\n", output) 
         print("---"*10)
         output=strip_thinking_tag(output)
@@ -99,11 +100,12 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
     else:        
         print(Fore.BLUE + "using build.nvidia.com's llm call > llm parsed relevent_chunks as context output=\n", output) 
         print("---"*10)
-        output=strip_thinking_tag(output)
+        #output=strip_thinking_tag(output)
+        output=""
         print(Fore.BLUE + "stripped thinking tag output=\n", output, Fore.RESET) 
         print("---"*10)
         
-        output = llm.invoke(study_material_generation_prompt_formatted).content
+        #output = llm.invoke(study_material_generation_prompt_formatted).content
         return output
     return output
 
@@ -116,4 +118,4 @@ if __name__ == "__main__":
     num_docs=5
     output=asyncio.run( study_material_gen(subject,sub_topic, pdf_file, num_docs))
     print(output)
-    #asyncio.run(filter_documents_by_file_name(query,pdf_file,1))
+    
