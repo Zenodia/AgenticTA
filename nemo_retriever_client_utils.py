@@ -3,7 +3,7 @@ import os
 import json
 import re
 import base64
-
+import random
 IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" #Replace this with the correct IP address
 RAG_SERVER_PORT = "8081"
 BASE_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
@@ -30,15 +30,17 @@ async def fetch_health_status():
 # Run the async function
 #await fetch_health_status()
 ## helpful function to quickly get documents
-async def document_seach(payload, url):
+async def document_search(payload, url):
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(url=url, json=payload) as response:
                 output = await print_response(response)
+                flag = True
         except aiohttp.ClientError as e:
             print(f"Error: {e}")
             output="error"
-    return output
+            flag = False
+    return flag, output
     
 async def get_documents(query):
     url = f"{BASE_URL}/v1/search"
@@ -58,9 +60,9 @@ async def get_documents(query):
       "reranker_model": "nvidia/llama-3.2-nv-rerankqa-1b-v2",
     
     }
-    output=await document_seach(payload, url)
-    return output
-
+    
+    flag, output=await document_search(payload, url)
+    return flag, output
 
 def is_base64(s):
     if not s or not isinstance(s, str):
@@ -108,9 +110,11 @@ def fetch_rag_context(output:str)-> str :
                 context_ls.append(f"extra_info:{table_or_text}")
             except :
                 pass 
-        ## limit the max content retrieve to top 5
-        if i>=5:
-            break
+        
         i+=1
+    n=len(context_ls)
+    if n>=5:
+        context_ls=ramdom.sample(context_ls,5)
+    
     return 'n'.join(context_ls)
 

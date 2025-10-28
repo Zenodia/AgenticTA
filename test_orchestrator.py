@@ -169,10 +169,15 @@ async def _build_chapters_from_quiz_output( pdf_files:list[str], quiz_csv_locati
     
     chapters=[]
     for i, s, ref in zip(range(n), chapter_title_cleaned, doc_reference_names):
+        print(f"....................................... i :{str(i)}...............................")
         if i==0:
+            print(Fore.LIGHTGREEN_EX + " creating studying materails for chapter :", i, Fore.RESET)
             print(Fore.LIGHTGREEN_EX + f"Generating subtopics for chapter {i+1} : {s} ..." , Fore.RESET)
             sub_topics_ls=generate_subtopics_for_chapter(s, quiz_csv_locations[i])
-            study_materials_for_first_chapter = await generate_parallel_study_materails(s,sub_topics_ls)
+            study_materials_ls=[]
+            for sub_topic in sub_topics_ls:
+                study_materials_for_first_chapter = await generate_study_material_for_chapter(s,sub_topic)
+                study_materails_ls.append(study_materials_for_first_chapter)
             chap = Chapter(number=i+1, name=s, status=Status.NA, sub_topics=sub_topics_ls, material=study_materials_for_first_chapter, reference=ref, quizes=[], feedback=[])
         else:
             chap = Chapter(number=i+1, name=s, status=Status.NA,sub_topics=[], material=[], reference=ref, quizes=[], feedback=[])
@@ -247,7 +252,8 @@ async def generate_parallel_study_materails(chapter_topic, sub_topics):
     # the async `generate_study_material_for_chapter` coroutine.
     max_concurrency = 5
     sem = asyncio.Semaphore(max_concurrency)
-
+    n=len(sub_topics)
+    
     async def _worker(subject, subtopic):
         async with sem:
             try:

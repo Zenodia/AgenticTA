@@ -8,33 +8,34 @@ import concurrent.futures
 import os,json
 import argparse
 from dotenv import load_dotenv
+from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
 load_dotenv()
 
 llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
 
-chapter_generation_prompt = """You are an expert in generation short chapter title to outline the studying curriculum.
-        You will have access to one summary extracted from the a processed document which user uploaded previously.
 
-        You will condense each summary and produce an appropriate title for that particular summary.
+main_title_generation_prompt = """You are an expert in generation short chapter title to outline the studying curriculum.
+        You will have access to sub_chapters extracted from each user uploaded documents
+
+        You will analyze the sub_chapters and produce an appropriate main title for that particular document.
         <EXAMPLE>        
-        document_summary:\nThis is a digital learning tool for driving license training. It is well-proven by students and driving schools. It is web-based and updated to most recent Swedish traffic regulations. This document includes basic variations of learning that are good to know before you practice driving.\n
-        **chapter_title:**\nChapter 1: Intro to driving course - before driving practice.\n
+        sub_chapters:
+        '0: Motorway Characteristics and Usage Restrictions\n1: Motorway Driving - Speeds, Entrances, and Exits\n2: Exiting Motorways & Adjusting to Lower-Speed Roads\n3: Motorway Driving Basics & Safe Overtaking Strategies\n4: Safe Driving in Traffic Queues\n5: Preparing for Post-Highway Driving: Hard Shoulder & Traffic Adjustments\n6: Best Practice for Speed Reduction when Exiting a Motorway\n7: Merging onto Motorway with Priority Considerations\n8: Driving on Expressways - Navigation & Safety Considerations\n10: Merging Lanes - Smooth Interweaving Techniques\n11: Understanding Road Sign Rules for Hard Shoulder Usage\n12: Interpreting Right-of-Way Road Signs\n13: Understanding Expressway Bans & Regulations'
+        **chapter_title:**\nDriving on Motorway.\n
         
-        document_summary:\nThe document outlines essential safety practices for driving on country roads, emphasizing proactive scanning, speed control, and risk mitigation. Key strategies include maintaining a three-second following distance, regularly checking mirrors in a systematic pattern, and adjusting speed for conditions to avoid "speed blindness." It details proper positioning for turns (right edge for right turns, center for lefts) and highlights dangers of overtaking and abrupt maneuvers. Technical aspects cover reaction/braking distance calculations, the impact of kinetic energy in crashes, and using roadside reflectors (spaced 50m apart) for distance judgment. The text also addresses parking restrictions, hard shoulder usage, and the importance of avoiding left turns without clear visibility. Overall, it stresses defensive driving techniques to counter higher speeds and reduced friction on rural roads.
-        **chapter_title:**\nChapter 2: Driving essentials - dirving on Country roads.
 
         ...and so on
         </EXAMPLE>
 
         <RULEs>
         You will strictly follow below 3 rules, and in this order, when you produce the chapter titles :        
-        1. you should always mark your response with '**chapter_title:**\n
-        2. you will be given a chapter_nr, say 9, then add a prefix 'Chapter 9:' before the title
-        3. you will condense the provided summary into one bery short sentence appropriate for a title 
+        1. you should always mark your response with '**chapter_title:**\n        
+        2. you will condense the provided summary into one very short sentence appropriate for a title 
+        3. return only the title, do not elaborate/explain anything else.
         </RULES>
         
-        current input document_summary: {document_summary}        
-        **chapter_title:**\nChapter {chapter_nr}:"""
+        current input sub_chapters: {sub_chapters}        
+        **chapter_title:**\n {chapter_nr}:"""
 
 chapter_generation_prompt_template = ChatPromptTemplate.from_template(chapter_generation_prompt)
 updated_curriculum_example_1={"Chapter 1: Introduction to Driving":("merged","Chapter 1: Introduction to Driving and Basics"), 
@@ -105,9 +106,6 @@ modify_chapter_chain=(
 )
 
 
-def fetch_summary(summary,chapter_nr):
-    out_d={"ducument_summary":summary,"chapter_nr":chapter_nr}
-    return out_d
 
 def parse_modified_curriculum(output):
     if '**updated_curriculum**' in output:
@@ -132,11 +130,6 @@ def modify_curriculum(current_curriculum, user_feedback):
     print(type(final_output), final_output.items())
     return final_output
 
-chapter_gen_chain = (
-    RunnablePassthrough()    
-    | chapter_generation_prompt_template
-    | llm
-)
 
 
 def process_parallel_titles(summaries, chapter_nrs):
@@ -161,10 +154,6 @@ def process_parallel_titles(summaries, chapter_nrs):
 
 
 
-def title_generator(summary,chapter_nr):
-    output=chapter_gen_chain.invoke({"document_summary":summary,"chapter_nr":chapter_nr})
-    output = output.content
-    return output
 
 #output=title_generator(summary,chapter_nr)
 

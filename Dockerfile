@@ -23,6 +23,7 @@ RUN pip install jupyterlab fastmcp colorama markdown gradio
 
 COPY . /workspace
 RUN pip install -r requirements.txt 
+RUN pip install nv-ingest==25.9.0 nv-ingest-api==25.9.0 nv-ingest-client==25.9.0 milvus-lite==2.4.12 pypdf
 
 # Expose port 8888 for JupyterLab
 EXPOSE 8888 9999 8000 7860 7861 60808

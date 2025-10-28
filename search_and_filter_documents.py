@@ -15,7 +15,6 @@ from dotenv import load_dotenv
 load_dotenv()
 from openai import OpenAI
 import os
-from search_and_filter_documents import filter_documents_by_file_name
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -52,6 +51,88 @@ def astra_llm_call(query):
             output_str=None
     return output_str
 
+
+
+IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" #Replace this with the correct IP address
+RAG_SERVER_PORT = "8081"
+BASE_RAG_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
+
+async def print_response(response):
+    """Helper to print API response."""
+    try:
+        response_json = await response.json()
+        output = json.dumps(response_json, indent=2)
+        print(json.dumps(response_json, indent=2))
+    except aiohttp.ClientResponseError:
+        print(await response.text())
+        output="error"
+    return output
+
+## helpful function to quickly get documents
+async def document_seach(payload, url):
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(url=url, json=payload) as response:
+                output = await print_response(response)
+        except aiohttp.ClientError as e:
+            print(f"Error: {e}")
+            output="error"
+    return output
+# possible filter expression
+#"filter_expr": '(content_metadata["manufacturer"] like "%ford%" and content_metadata["rating"] > 4.0 and content_metadata["created_date"] between "2020-01-01" and "2024-12-31" and content_metadata["is_public"] == true) or (content_metadata["model"] like "%edge%" and content_metadata["year"] >= 2020 and content_metadata["tags"] in ["technology", "safety", "latest"] and content_metadata["rating"] >= 4.0)'
+async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : int = 5):
+    url = f"{BASE_RAG_URL}/v1/search"
+    if pdf_file_name and query :
+        pdf_file_name= pdf_file_name.lower()
+        filter_expr_str=f'content_metadata["source_ref"]=="{pdf_file_name}"'
+        payload={
+        "query": query , # replace with your own query 
+        "reranker_top_k": 5,
+        "vdb_top_k": 20,
+        "vdb_endpoint": "http://milvus:19530",
+        "collection_names": ["zcharpy"], # Multiple collection retrieval can be used by passing multiple collection names
+        "messages": [],
+        "enable_query_rewriting": False,
+        "enable_reranker": True,
+        "embedding_model": "nvidia/llama-3.2-nv-embedqa-1b-v2",
+        # Provide url of the model endpoints if deployed elsewhere
+        #"embedding_endpoint": "",
+        #"reranker_endpoint": "",
+        "reranker_model": "nvidia/llama-3.2-nv-rerankqa-1b-v2",
+        "filter_expr": filter_expr_str
+        }
+        output=await document_seach(payload, url)
+    elif query :
+        payload={
+        "query": query , # replace with your own query 
+        "reranker_top_k": 5,
+        "vdb_top_k": 20,
+        "vdb_endpoint": "http://milvus:19530",
+        "collection_names": ["zcharpy"], # Multiple collection retrieval can be used by passing multiple collection names
+        "messages": [],
+        "enable_query_rewriting": True,
+        "enable_reranker": True,
+        "embedding_model": "nvidia/llama-3.2-nv-embedqa-1b-v2",
+        # Provide url of the model endpoints if deployed elsewhere
+        #"embedding_endpoint": "",
+        #"reranker_endpoint": "",
+        "reranker_model": "nvidia/llama-3.2-nv-rerankqa-1b-v2",
+        "filter_expr": ""
+        }
+        output=await document_seach(payload, url)
+    else:
+        output="query is empty, please make sure you input non-empty query"
+    
+    return output
+
+
+async def filter_documents_by_file_name(query,pdf_file,num_docs):        
+    output = await get_documents(query, pdf_file, 3)
+    output_d=json.loads(output)
+    output_ls =[]
+    for o in output_d["results"]:
+        print( o["document_name"], o["metadata"]["page_number"],'\n', o["metadata"]["description"])
+    return output_d["results"]
 
 
 def strip_thinking_tag(response):
