@@ -20,4 +20,4 @@ completion = client.chat.completions.create(
   max_tokens=4096,
   stream=False
 )
-print(completion)
+print(completion.choices[0].message.content)

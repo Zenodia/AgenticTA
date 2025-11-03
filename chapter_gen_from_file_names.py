@@ -10,6 +10,7 @@ import json
 import requests
 import argparse
 from dotenv import load_dotenv
+from llm_call_utils import llm_call
 from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
 load_dotenv()
 API_KEY=os.environ["ASTRA_TOKEN"]
@@ -234,7 +235,7 @@ chapter_gen_chain = (
 def chapter_gen_from_pdfs(pdf_files_loc):
     pdf_file_names = [f for f in os.listdir(pdf_files_loc) if f.endswith('.pdf')]
     ordered_chapters_prompt=chapter_generation_prompt.format(pdf_file_names=pdf_file_names)
-    output = astra_llm_call(ordered_chapters_prompt)
+    output = llm_call(ordered_chapters_prompt)
     if output :
         return output
     else:

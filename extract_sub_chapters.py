@@ -27,7 +27,7 @@ load_dotenv()
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
-
+from llm_call_utils import llm_call
 import requests
 import os
 import re
@@ -118,7 +118,7 @@ def get_pdf_pages(pdf_file):
 
 def title_generator(summary,chapter_nr):
     query=sub_topics_generation_prompt.format(document_summary=summary, chapter_nr=chapter_nr)    
-    output=astra_llm_call(query)
+    output=llm_call(query)
     if output :
         return output
     else:

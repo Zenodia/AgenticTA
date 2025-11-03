@@ -14,6 +14,7 @@ import argparse
 from dotenv import load_dotenv
 load_dotenv()
 from openai import OpenAI
+from llm_call_utils import llm_call
 import os
 import base64
 from PIL import Image
@@ -107,7 +108,7 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
     if len(output)>0 :   
         detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])
         study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
-        llm_parsed_output=astra_llm_call(study_material_generation_prompt_formatted)  
+        llm_parsed_output=llm_call(study_material_generation_prompt_formatted)  
         #print(Fore.BLUE + "using astra llm call > llm parsed relevent_chunks as context output=\n", llm_parsed_output) 
         #print("---"*10)
         study_material_str=strip_thinking_tag(llm_parsed_output)
