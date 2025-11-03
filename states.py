@@ -30,12 +30,24 @@ class Status(Enum):
 #print(model.status)          # Output: Status.STARTED
 #print(MyModel().status)      # Output: None
 
+
+
+class SubTopic(BaseModel):
+    number : int = Field(description="each sub-topic is numbered")
+    sub_topic : str = Field(description="name of this sub-topic")
+    status: Optional[Status] = None    
+    study_material: Optional[str] # each studying materails should be in markdown format  
+    reference: str = Field(description="name of the PDF document, from which this chapter is derived")    
+    quizes : List[dict] # each quiz is a dictionary, user can generate several round of quizes
+    feedback:Optional[List[str]]
+
+
+
 class Chapter(BaseModel):
     number : int = Field(description="each chapter is numbered")
     name : str = Field(description="name of this chapter")
     status: Optional[Status] = None
-    sub_topics: Optional[List[str]] = Field(description="list of sub_topics under this chapter")
-    material: Optional[List[str]] # each studying materails should be in markdown format  
+    sub_topics: Optional[List[SubTopic]] = Field(description="list of sub_topics under this chapter")    
     reference: str = Field(description="name of the PDF document, from which this chapter is derived")    
     quizes : List[dict] # each quiz is a dictionary, user can generate several round of quizes
     feedback:Optional[List[str]]
@@ -191,12 +203,20 @@ if __name__ == "__main__":
         "answer": "A",  # Index of correct choice (0-based)
         "explanation": "here is an explanation"
     }
+    sub_topic_1=SubTopic(
+        number=0,        
+        sub_topic="intro to sub-topic 1",
+        status=Status.STARTED,
+        study_material="here is my study material fetched from nemo retriever document search",
+        reference="name of the pdf file and page number",
+        quizes = [quiz_1],
+        feedback = ["no feedback"]
+    )
     chapter_1=Chapter(
         number=1,
         name="Intro to Driving Basics",
         status=Status.STARTED, 
-        sub_topics=[],
-        material=[driving_intro] , 
+        sub_topics=sub_topic_1,        
         reference="intro_to_driving.pdf",
         quizes=[quiz_1],
         feedback=["this is good!"])

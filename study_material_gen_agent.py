@@ -44,7 +44,7 @@ def astra_llm_call(query):
                 'content': query,
             },
         ],
-        'max_tokens': 512,
+        'max_tokens': 32768,
         'stream': False,
     }
 
@@ -59,7 +59,6 @@ def astra_llm_call(query):
     except:
             output_str=None
     return output_str
-
 
 
 def strip_thinking_tag(response):
@@ -93,7 +92,8 @@ study_material_gen_prompts= PromptTemplate(
 async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
     valid_flag=False
     cnt=0
-    while valid_flag==False or cnt <= 2: # allow re-trial 3 times 
+    num_docs=3
+    while valid_flag==False or cnt <= 3: # allow re-trial 3 times 
         valid_flag , output = await filter_documents_by_file_name(sub_topic,pdf_file_name,num_docs)
         print("got valid output =" , valid_flag , valid_flag == False ) 
         if valid_flag:
@@ -108,8 +108,8 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
         detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])
         study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
         llm_parsed_output=astra_llm_call(study_material_generation_prompt_formatted)  
-        print(Fore.BLUE + "using astra llm call > llm parsed relevent_chunks as context output=\n", llm_parsed_output) 
-        print("---"*10)
+        #print(Fore.BLUE + "using astra llm call > llm parsed relevent_chunks as context output=\n", llm_parsed_output) 
+        #print("---"*10)
         study_material_str=strip_thinking_tag(llm_parsed_output)
         
         reference_images_base64_str='\n'.join([f"""<br><p align='center'><img src='data:image/png;base64,{o["content"]}'/></p></br>""" for o in output if o["document_type"] in ["image", "table", "chart"] ])
@@ -123,10 +123,10 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
             {reference_images_base64_str}               
             ''')
 
-        print(Fore.BLUE + "stripped thinking tag output=\n", output, Fore.RESET) 
+        print(Fore.BLUE + "stripped thinking tag output=\n", study_material_str, Fore.RESET) 
         print("---"*10)
         
-        return output , markdown_str
+        return study_material_str , markdown_str
     else:        
         print(Fore.BLUE + "using build.nvidia.com's llm call > llm parsed relevent_chunks as context output=\n", output) 
         print("---"*10)
@@ -146,5 +146,5 @@ if __name__ == "__main__":
     sub_topic="**chapter_title:**18: Driving License Regulations, Requirements & Exceptions"
     num_docs=5
     output, markdown_str =asyncio.run( study_material_gen(subject,sub_topic, pdf_file, num_docs))
-    print(type(output), output)
+    print(type(output), Fore.GREEN + "output=\n\n",output)
     

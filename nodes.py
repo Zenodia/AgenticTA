@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass
 from colorama import Fore
 from helper import run_together
 from chapter_gen_from_file_names import chapter_gen_from_pdfs, parse_output_from_chapters
-from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status
+from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic
 from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe
 from study_material_gen_agent import study_material_gen, printmd
@@ -195,21 +195,56 @@ async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
                                     
             num_docs=3
             print("subject =", subject ,"\n sub_topics=\n", sub_topics, "\npdf_f_name=\n", pdf_f_name)
-            # pass the full pdf path (pdf_loc) into the extractor so it can locate the file
-            output_study_material_ls = []
-            for sub_topic in sub_topics:
-                print(f" ---------------------- i= {str(i)} | pdf_f_name : {pdf_f_name} | sub_topic= {sub_topic} ------------------------") 
+            # pass the full pdf path (pdf_loc) into the extractor so it can locate the file            
+            sub_topic_ls=[]
+            valid_sub_topics=[]
+            j=0
+            for sub_topic in sub_topics_ordered:
+                
+                print(f" ======================== j = {str(j)} | pdf_f_name : {pdf_f_name} | sub_topic= {sub_topic} ===================") 
                 num_docs=3
-                study_material_str, markdown_str = await  study_material_gen(subject,sub_topic, pdf_f_name, num_docs)
-                print(Fore.YELLOW + "markdown_pretty_print \n ") 
-                print( study_material_str)
-                output_study_material_ls.append(study_material_str)
-                print("\n\n\n")
-            print(Fore.BLUE + "type of output_study_material_ls ", type(output_study_material_ls),len(output_study_material_ls), output_study_material_ls[-1])
+                if ':' in sub_topic:
+                    _sub_topic=sub_topic.split(':')[-1]
+                else:
+                    _sub_topic=sub_topic
+                study_material_str, markdown_str = await study_material_gen(subject,_sub_topic, pdf_f_name, num_docs)
+                if markdown_str == "":
+                    pass
+                    print(Fore.YELLOW + f"invalid subtopic {sub_topic} failed to fetch relevant documents\n ") 
+                else:
+                    sub_topic_temp=SubTopic(
+                        number=i,        
+                        sub_topic=sub_topic,
+                        status=Status.STARTED,
+                        study_material=study_material_str,
+                        reference=pdf_f_name,
+                        quizes = [],
+                        feedback = []
+                    )
+                    j+=1
+                    valid_sub_topics.append(sub_topic_temp)
+                    print(Fore.YELLOW + "markdown_pretty_print \n ") 
+                    print( study_material_str)                
+                    print("\n\n\n")
+           
+            chap=Chapter(
+            number=i,
+            name=chapter_title,
+            status=Status.STARTED, 
+            sub_topics=valid_sub_topics,        
+            reference=pdf_f_name,
+            quizes=[],
+            feedback=[])
             
-            chap = Chapter(number=i, name=chapter_title, status=Status.NA, sub_topics=sub_topics_ordered, material=output_study_material_ls, reference=pdf_f_name, quizes=[], feedback=[])
         else:
-            chap = Chapter(number=i, name=chapter_title, status=Status.NA, sub_topics=[], material=[], reference=pdf_f_name, quizes=[], feedback=[])
+            chap=Chapter(
+            number=i,
+            name=chapter_title,
+            status=Status.STARTED, 
+            sub_topics=[],        
+            reference=pdf_f_name,
+            quizes=[],
+            feedback=[])
         
         chapters.append(chap)
         i+=1
