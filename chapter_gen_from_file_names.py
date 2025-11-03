@@ -276,8 +276,9 @@ chapters=[1,2]
 output = process_parallel_titles(summaries, chapters)
 print(type(output), output)"""
 pdf_files_loc="/workspace/mnt/pdfs/"
+"""
 output = chapter_gen_from_pdfs(pdf_files_loc)
 chapter_output=parse_output_from_chapters(output)
 for c in chapter_output:
     print("---"*10)
-    print(type(c), c)
+    print(type(c), c)"""

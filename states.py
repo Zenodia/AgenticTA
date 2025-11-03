@@ -216,7 +216,7 @@ if __name__ == "__main__":
         number=1,
         name="Intro to Driving Basics",
         status=Status.STARTED, 
-        sub_topics=sub_topic_1,        
+        sub_topics=[sub_topic_1],        
         reference="intro_to_driving.pdf",
         quizes=[quiz_1],
         feedback=["this is good!"])

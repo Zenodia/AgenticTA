@@ -301,7 +301,7 @@ async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_pr
     return gstate
 
 
-async def run_for_user(user: User, uploaded_pdf_loc: str, save_to:str, study_buddy_preference: str) -> dict:
+async def run_for_first_time_user(user: User, uploaded_pdf_loc: str, save_to:str, study_buddy_preference: str) -> dict:
     """Main entrypoint: ensure user exists, call helper clients if necessary,
     populate states, and return the GlobalState dict.
     """
@@ -343,6 +343,6 @@ if __name__ == "__main__":
     )
     uploaded_pdf_loc=args.pdf_loc
     save_to=args.save_to
-    g = asyncio.run(run_for_user(u,uploaded_pdf_loc,save_to, args.preference))
+    g = asyncio.run(run_for_first_time_user(u,uploaded_pdf_loc,save_to, args.preference))
     # print a JSON-serializable representation of the user
     print(json.dumps(convert_to_json_safe(u), indent=2, ensure_ascii=False))
