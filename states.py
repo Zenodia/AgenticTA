@@ -35,7 +35,7 @@ class Chapter(BaseModel):
     name : str = Field(description="name of this chapter")
     status: Optional[Status] = None
     sub_topics: Optional[List[str]] = Field(description="list of sub_topics under this chapter")
-    material: List[Any] # each studying materails should be in markdown format  
+    material: Optional[List[str]] # each studying materails should be in markdown format  
     reference: str = Field(description="name of the PDF document, from which this chapter is derived")    
     quizes : List[dict] # each quiz is a dictionary, user can generate several round of quizes
     feedback:Optional[List[str]]
