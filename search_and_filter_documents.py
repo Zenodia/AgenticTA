@@ -22,7 +22,6 @@ from IPython.display import Markdown, display
 import markdown
 from dotenv import load_dotenv
 load_dotenv()
-
 API_KEY=os.environ["ASTRA_TOKEN"]
 headers = {
     'Content-Type': 'application/json',
@@ -115,8 +114,7 @@ async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : i
         output=await document_seach(payload, url)
     elif query :
         payload={
-        "query": query , # replace with your own query 
-        "reranker_top_k": 5,
+        "query": query , # replace with your own query         
         "vdb_top_k": 20,
         "vdb_endpoint": "http://milvus:19530",
         "collection_names": ["zcharpy"], # Multiple collection retrieval can be used by passing multiple collection names
@@ -126,8 +124,7 @@ async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : i
         "embedding_model": "nvidia/llama-3.2-nv-embedqa-1b-v2",
         # Provide url of the model endpoints if deployed elsewhere
         #"embedding_endpoint": "",
-        #"reranker_endpoint": "",
-        "reranker_model": "nvidia/llama-3.2-nv-rerankqa-1b-v2",
+        #"reranker_endpoint": "",        
         "filter_expr": ""
         }
         output=await document_seach(payload, url)
@@ -143,12 +140,15 @@ async def filter_documents_by_file_name(query,pdf_file,num_docs):
     output = await get_documents(query, pdf_file, 3)
     try:
         output_d=json.loads(output)
+        if len(output_d["results"])>0:
+            flag=True
+        else:
+            flag=False
         for o in output_d["results"]:
             print( o["document_name"], o["metadata"]["page_number"],'\n', o["metadata"]["description"])
-        return True, output_d["results"]
+        return flag, output_d["results"]
     except:
         return False, []
-
 
 def strip_thinking_tag(response):
     if "</think>" in response:
@@ -157,7 +157,6 @@ def strip_thinking_tag(response):
         return output
     else:
         return response
-
 
 study_material_gen_prompts= PromptTemplate(
     template=("""
@@ -189,7 +188,9 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
         elif cnt >=1:
             break     
         cnt += 1
-    
+    if not valid_flag :
+        valid_flag , output = await filter_documents_by_file_name(sub_topic,None,num_docs)
+
     if len(output)>0 :   
         detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])
         study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)

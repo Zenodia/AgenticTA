@@ -198,9 +198,9 @@ async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
             # pass the full pdf path (pdf_loc) into the extractor so it can locate the file
             output_study_material_ls = []
             for sub_topic in sub_topics:
-                print(f" ---------------------- i= {str(i)} | sub_topic= {sub_topic} ------------------------") 
+                print(f" ---------------------- i= {str(i)} | pdf_f_name : {pdf_f_name} | sub_topic= {sub_topic} ------------------------") 
                 num_docs=3
-                study_material_str, markdown_str=asyncio.run(study_material_gen(subject,sub_topic, pdf_loc, num_docs))                                                
+                study_material_str, markdown_str = await  study_material_gen(subject,sub_topic, pdf_f_name, num_docs)
                 print(Fore.YELLOW + "markdown_pretty_print \n ") 
                 print( study_material_str)
                 output_study_material_ls.append(study_material_str)
@@ -220,7 +220,7 @@ async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_pr
     """Given results from MCP clients, construct Chapter, StudyPlan, Curriculum, User and GlobalState
     and persist them in the store. Returns the GlobalState as dict.
     """
-    chapters = asyncio.run(build_chapters(pdf_files_loc))
+    chapters = await build_chapters(pdf_files_loc)
     print(Fore.LIGHTGREEN_EX + "len of chapter is = \n",len(chapters), chapters, '\n\n', Fore.RESET )
     study_plan = StudyPlan(study_plan=chapters)
     if len(chapters) == 1:
@@ -285,7 +285,7 @@ async def run_for_user(user: User, uploaded_pdf_loc: str, save_to:str, study_bud
     
 
     print("Populating application states ...")
-    gstate = asyncio.run(populate_states_for_user(user, uploaded_pdf_loc, study_buddy_preference))
+    gstate = await populate_states_for_user(user, uploaded_pdf_loc, study_buddy_preference)
     print("Done. GlobalState created and saved.")
     return gstate
 

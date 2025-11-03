@@ -93,15 +93,17 @@ study_material_gen_prompts= PromptTemplate(
 async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
     valid_flag=False
     cnt=0
-    while valid_flag==False: # allow re-trial 3 times 
+    while valid_flag==False or cnt <= 2: # allow re-trial 3 times 
         valid_flag , output = await filter_documents_by_file_name(sub_topic,pdf_file_name,num_docs)
-        print("got valid output =" , valid_flag  ) 
+        print("got valid output =" , valid_flag , valid_flag == False ) 
         if valid_flag:
             break   
         elif cnt >=1:
             break     
         cnt += 1
-    
+    if not valid_flag :
+        valid_flag , output = await filter_documents_by_file_name(sub_topic,None,num_docs)
+
     if len(output)>0 :   
         detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])
         study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
@@ -135,15 +137,13 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
         
         #output = llm.invoke(study_material_generation_prompt_formatted).content
         return output, ""
-    
-
 if __name__ == "__main__":
     # Move top-level async calls into an async main to avoid 'await outside function'
     #query = "fetch information on driving in highway/mortorway"
     query = "\n1: Learning Techniques for Driving - Awareness, Overlearning, and Deep Insight."
-    pdf_file = "SwedenDrivingCourse_Motorway.pdf"
+    pdf_file = "SwedenDriving_intro.pdf"
     subject=pdf_file.split('.pdf')[0]
-    sub_topic="0: Motorway Characteristics and Usage Restrictions"
+    sub_topic="**chapter_title:**18: Driving License Regulations, Requirements & Exceptions"
     num_docs=5
     output, markdown_str =asyncio.run( study_material_gen(subject,sub_topic, pdf_file, num_docs))
     print(type(output), output)
