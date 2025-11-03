@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-API_KEY=os.environ["ASTRA_TOKEN"]
+API_KEY=os.environ.get("ASTRA_TOKEN", "")
 if API_KEY:
     headers = {
         'Content-Type': 'application/json',

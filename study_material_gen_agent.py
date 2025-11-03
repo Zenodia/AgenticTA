@@ -25,7 +25,7 @@ from search_and_filter_documents import filter_documents_by_file_name
 from dotenv import load_dotenv
 load_dotenv()
 
-API_KEY=os.environ["ASTRA_TOKEN"]
+API_KEY=os.environ.get("ASTRA_TOKEN", "")
 headers = {
     'Content-Type': 'application/json',
     'Authorization': f'Bearer {API_KEY}',

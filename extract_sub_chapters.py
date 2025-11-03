@@ -34,7 +34,7 @@ import re
 from collections import OrderedDict
 load_dotenv()
 
-API_KEY=os.environ["ASTRA_TOKEN"]
+API_KEY=os.environ.get("ASTRA_TOKEN", "")
 headers = {
     'Content-Type': 'application/json',
     'Authorization': f'Bearer {API_KEY}',
