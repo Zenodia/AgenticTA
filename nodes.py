@@ -32,8 +32,8 @@ import asyncio
 import concurrent
 
 # Local simple storage for users (JSON file)
-STORE_PATH = Path("/workspace/mnt/_GlobalState_store.json")
-USER_STORE_DIR = Path("/workspace/mnt/users")
+STORE_PATH = Path(os.environ["global_state_json_path"])
+USER_STORE_DIR = Path(os.enviorn["user_store_path"])
 USER_STORE_DIR.mkdir(exist_ok=True)
 
 # global placeholders populated by `call_helper_clients_for_user`
@@ -168,6 +168,77 @@ def parallel_extract_study_materials(subject, sub_topics, pdf_file, num_docs):
                 #outputs.append
     print(Fore.BLUE +"#### extracted future_to_page_text >>>> ", len(outputs), type(outputs),outputs[-1], Fore.RESET)
     return outputs
+async def sub_topic_builder(pdf_loc, subject, pdf_f_name):
+    sub_topics = parallel_extract_pdf_page_and_text(pdf_loc)
+    sub_topics_ordered = post_process_extract_sub_chapters(sub_topics)        
+    print(Fore.LIGHTGREEN_EX + " creating studying materails for chapter :", Fore.RESET)
+                            
+    num_docs=3
+    print("subject =", subject ,"\n sub_topics=\n", sub_topics, "\npdf_f_name=\n", pdf_f_name)
+    # pass the full pdf path (pdf_loc) into the extractor so it can locate the file                
+    valid_sub_topics=[]
+    j=0
+    for sub_topic in sub_topics_ordered:
+        
+        print(f" ======================== j = {str(j)} | pdf_f_name : {pdf_f_name} | sub_topic= {sub_topic} ===================") 
+        num_docs=3
+        if ':' in sub_topic:
+            _sub_topic=sub_topic.split(':')[-1]
+        else:
+            _sub_topic=sub_topic
+        study_material_str, markdown_str = await study_material_gen(subject,_sub_topic, pdf_f_name, num_docs)
+        if markdown_str == "":
+            pass
+            print(Fore.YELLOW + f"invalid subtopic {sub_topic} failed to fetch relevant documents\n ") 
+        else:
+            sub_topic_temp=SubTopic(
+                number=i,        
+                sub_topic=sub_topic,
+                status=Status.STARTED,
+                study_material=study_material_str,
+                reference=pdf_f_name,
+                quizes = [],
+                feedback = []
+            )
+            j+=1
+            valid_sub_topics.append(sub_topic_temp)
+            sub_topic_ls.append(sub_topic)
+            print(Fore.YELLOW + "markdown_pretty_print \n ") 
+            print( study_material_str)                
+            print("\n\n\n")
+    return valid_sub_topics           
+
+
+async def build_next_chapter( curriculum : Curriculum ) -> Curriculum :
+    """Try to reuse the heuristics in helper.extract_summaries_and_chapters
+    to create Chapter objects. We'll implement a small local parser here so
+    the orchestrator is self-contained.
+    """
+    study_plan = curriculum["study_plan"]
+    next_chapter = curriculum["next_chapter"]
+    active_chapter = curriculum["active_chapter"]
+    active_chapter.status = Status.COMPLETED 
+    current_index = active_chapter.number 
+    pdf_file_loc = next_chapter.pdf_loc 
+    chapter_titile = next_chapter.name 
+
+    pdf_f_name=pdf_file_loc.split('/')[-1]
+    subject=pdf_f_name.split('.pdf')[0]
+    
+    subtopics_and_study_material = await sub_topic_builder(pdf_file_loc, subject, pdf_f_name)
+    chap=Chapter(
+    number=i,
+    name=chapter_title,
+    status=Status.STARTED, 
+    sub_topics=subtopics_and_study_material,        
+    reference=pdf_f_name,
+    pdf_loc = pdf_loc,
+    quizes=[],
+    feedback=[])
+    curriculum["active_chapter"]=chap 
+    curriculum["next_chapter"] = study_plan[current_index+1]
+    print(Fore.LIGHTGREEN_EX + " how many chapters = \n", len(chapters), chapters, Fore.RESET)
+    return curriculum
 
 
 async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
@@ -182,57 +253,22 @@ async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
     pdf_files_ls = [os.path.join(pdf_files_loc, item["file_loc"]) for item in chapter_output]
     chapter_titles_cleaned_ls=[ item["title"] for item in chapter_output]
     chapters=[]
+
     i=0
     for pdf_loc, chapter_title in zip(pdf_files_ls,chapter_titles_cleaned_ls):
         print(f"....................................... i :{str(i)}...............................")
         print( "pdf_loc =", pdf_loc , "|" , "chapter_title=",chapter_title)
         pdf_f_name=pdf_loc.split('/')[-1]
         subject=pdf_f_name.split('.pdf')[0]
-        if i==0:
-            sub_topics = parallel_extract_pdf_page_and_text(pdf_loc)
-            sub_topics_ordered = post_process_extract_sub_chapters(sub_topics)        
-            print(Fore.LIGHTGREEN_EX + " creating studying materails for chapter :", i, Fore.RESET)
-                                    
-            num_docs=3
-            print("subject =", subject ,"\n sub_topics=\n", sub_topics, "\npdf_f_name=\n", pdf_f_name)
-            # pass the full pdf path (pdf_loc) into the extractor so it can locate the file            
-            sub_topic_ls=[]
-            valid_sub_topics=[]
-            j=0
-            for sub_topic in sub_topics_ordered:
-                
-                print(f" ======================== j = {str(j)} | pdf_f_name : {pdf_f_name} | sub_topic= {sub_topic} ===================") 
-                num_docs=3
-                if ':' in sub_topic:
-                    _sub_topic=sub_topic.split(':')[-1]
-                else:
-                    _sub_topic=sub_topic
-                study_material_str, markdown_str = await study_material_gen(subject,_sub_topic, pdf_f_name, num_docs)
-                if markdown_str == "":
-                    pass
-                    print(Fore.YELLOW + f"invalid subtopic {sub_topic} failed to fetch relevant documents\n ") 
-                else:
-                    sub_topic_temp=SubTopic(
-                        number=i,        
-                        sub_topic=sub_topic,
-                        status=Status.STARTED,
-                        study_material=study_material_str,
-                        reference=pdf_f_name,
-                        quizes = [],
-                        feedback = []
-                    )
-                    j+=1
-                    valid_sub_topics.append(sub_topic_temp)
-                    print(Fore.YELLOW + "markdown_pretty_print \n ") 
-                    print( study_material_str)                
-                    print("\n\n\n")
-           
+        if i==0 :
+            valid_sub_topics = await sub_topic_builder(pdf_loc, subject, pdf_f_name)
             chap=Chapter(
             number=i,
             name=chapter_title,
             status=Status.STARTED, 
             sub_topics=valid_sub_topics,        
             reference=pdf_f_name,
+            pdf_loc = pdf_loc,
             quizes=[],
             feedback=[])
             
@@ -240,15 +276,18 @@ async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
             chap=Chapter(
             number=i,
             name=chapter_title,
-            status=Status.STARTED, 
+            status=Status.NA, 
             sub_topics=[],        
             reference=pdf_f_name,
+            pdf_loc = pdf_loc,
             quizes=[],
             feedback=[])
         
         chapters.append(chap)
-        i+=1
-    print(Fore.LIGHTGREEN_EX + " how many chapters = \n", len(chapters), chapters, Fore.RESET)
+        i+=
+    
+
+        print(Fore.LIGHTGREEN_EX + " how many chapters = \n", len(chapters), chapters, Fore.RESET)
     return chapters
 
 async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_preference: str) -> dict:

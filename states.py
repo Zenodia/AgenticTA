@@ -48,9 +48,10 @@ class Chapter(BaseModel):
     name : str = Field(description="name of this chapter")
     status: Optional[Status] = None
     sub_topics: Optional[List[SubTopic]] = Field(description="list of sub_topics under this chapter")    
-    reference: str = Field(description="name of the PDF document, from which this chapter is derived")    
+    reference: str = Field(description="name of the PDF document, from which this chapter is derived")   
+    pdf_loc : str = Field(description= "absolute path to where the pdf is located ") 
     quizes : List[dict] # each quiz is a dictionary, user can generate several round of quizes
-    feedback:Optional[List[str]]
+    feedback:Optional[List[str]]    
 
 ## each quiz is a dictionary looks like this 
 class StudyPlan(BaseModel):
@@ -79,7 +80,7 @@ class GlobalState(TypedDict):
     # The outcome of a given call to the agent
     # Needs `None` as a valid type, since this is what this will start as
     user: User
-    node_name: str = Field(description="name of the current node in the agentic system")
+    node_name: str = Field(description="name of the current node in the agentic system")    
     # List of actions and corresponding observations
     # Here we annotate this with `operator.add` to indicate that operations to
     # this state should be ADDED to the existing values (not overwrite it)
@@ -264,5 +265,5 @@ if __name__ == "__main__":
             ac = curr["active_chapter"]
             print("Active chapter name:", ac.name if hasattr(ac, 'name') else ac.get('name'))
     except Exception as e:
-        print("Load check error:", e)
-    """
+        print("Load check error:", e)"""
+    
