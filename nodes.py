@@ -33,7 +33,7 @@ import concurrent
 
 # Local simple storage for users (JSON file)
 STORE_PATH = Path(os.environ["global_state_json_path"])
-USER_STORE_DIR = Path(os.enviorn["user_store_path"])
+USER_STORE_DIR = Path(os.environ["user_store_path"])
 USER_STORE_DIR.mkdir(exist_ok=True)
 
 # global placeholders populated by `call_helper_clients_for_user`
@@ -192,9 +192,9 @@ async def sub_topic_builder(pdf_loc, subject, pdf_f_name):
             print(Fore.YELLOW + f"invalid subtopic {sub_topic} failed to fetch relevant documents\n ") 
         else:
             sub_topic_temp=SubTopic(
-                number=i,        
+                number=j,        
                 sub_topic=sub_topic,
-                status=Status.STARTED,
+                status=Status.NA,
                 study_material=study_material_str,
                 reference=pdf_f_name,
                 quizes = [],
@@ -284,7 +284,7 @@ async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
             feedback=[])
         
         chapters.append(chap)
-        i+=
+        i+=1
     
 
         print(Fore.LIGHTGREEN_EX + " how many chapters = \n", len(chapters), chapters, Fore.RESET)
