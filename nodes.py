@@ -6,9 +6,88 @@ that can be wired together. It uses `helper.run_together` to call the MCP
 clients (quiz generation, study buddy, agentic memory) and then constructs
 `Chapter`, `StudyPlan`, `Curriculum`, `User`, and `GlobalState` objects.
 
-The orchestrator exposes a `run_for_user(user_id)` function that will check
-for an existing user (in a local JSON store), create/populate state objects
-for first-time users, and return the final GlobalState instance.
+The orchestrator exposes a `run_for_first_time_user(user, uploaded_pdf_loc, save_to, study_buddy_preference)` 
+function that will initialize per-user storage paths, check for an existing user 
+(in a local JSON store), create/populate state objects for first-time users, 
+and return the final GlobalState instance.
+
+Per-User Storage Structure:
+    save_to/
+    └── user_id/
+        ├── global_state.json      # GlobalState for this user
+        └── user_store/             # Per-user storage files
+            └── user_id.json        # User profile with Curriculum > StudyPlan > Chapter > SubTopic
+
+Example:
+    /workspace/mnt/
+    └── babe/
+        ├── global_state.json
+        └── user_store/
+            └── babe.json
+
+User State Update Functions:
+    This module provides several functions to load, update, and save user states:
+    
+    1. update_and_save_user_state(user_id, save_to, update_fn)
+       - Generic function that accepts a callback for custom updates
+       - Loads user state, applies updates, saves back to disk
+       
+    2. move_to_next_chapter(user_id, save_to)
+       - Marks current chapter as COMPLETED
+       - Moves to next chapter and sets it as STARTED
+       - Updates study plan accordingly
+       
+    3. update_subtopic_status(user_id, save_to, subtopic_number, new_status, feedback)
+       - Updates a specific subtopic's status
+       - Optionally adds feedback
+       
+    4. add_quiz_to_subtopic(user_id, save_to, subtopic_number, quiz)
+       - Adds a quiz to a specific subtopic
+
+Troubleshooting:
+    If you encounter JSON parsing errors when loading user state:
+    1. The saved state file may be corrupted or from an older version
+    2. Delete the user directory: rm -rf {save_to}/{user_id}/
+    3. Re-run run_for_first_time_user to recreate the state
+    
+    Example:
+        # If getting JSON errors for user 'babe'
+        rm -rf /workspace/mnt/babe/
+        # Then re-run the initialization
+       
+Usage Examples:
+    # Move to next chapter (async)
+    updated_state = await move_to_next_chapter("babe", "/workspace/mnt/")
+    # Or from synchronous context:
+    updated_state = asyncio.run(move_to_next_chapter("babe", "/workspace/mnt/"))
+    
+    # Update subtopic status with feedback (async)
+    updated_state = await update_subtopic_status(
+        "babe", "/workspace/mnt/", 
+        subtopic_number=0,
+        new_status=Status.COMPLETED,
+        feedback=["Great work!", "All tests passed"]
+    )
+    
+    # Add a quiz (async)
+    quiz = {
+        "question": "What is X?",
+        "choices": ["A", "B", "C"],
+        "answer": "A",
+        "explanation": "Because..."
+    }
+    updated_state = await add_quiz_to_subtopic("babe", "/workspace/mnt/", 0, quiz)
+    
+    # Custom update (async)
+    async def my_update(user_state):
+        curriculum_list = user_state.get("curriculum")  # curriculum is List[Curriculum]
+        if curriculum_list and isinstance(curriculum_list, list) and len(curriculum_list) > 0:
+            curriculum = curriculum_list[0]  # Get first curriculum
+            active_ch = curriculum.get("active_chapter")
+            # ... custom logic ...
+        return user_state
+    
+    updated_state = await update_and_save_user_state("babe", "/workspace/mnt/", my_update)
 """
 from __future__ import annotations
 from study_buddy_client import study_buddy_client_requests
@@ -31,10 +110,35 @@ from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_proces
 import asyncio
 import concurrent
 
-# Local simple storage for users (JSON file)
-STORE_PATH = Path(os.environ["global_state_json_path"])
-USER_STORE_DIR = Path(os.environ["user_store_path"])
-USER_STORE_DIR.mkdir(exist_ok=True)
+# Local simple storage for users (JSON file) - will be initialized per user
+STORE_PATH = None
+USER_STORE_DIR = None
+
+def init_user_storage(save_to: str, user_id: str):
+    """Initialize per-user storage paths based on save_to and user_id.
+    
+    Args:
+        save_to: Base directory for storing user data
+        user_id: Unique user identifier
+        
+    This creates a directory structure like:
+        save_to/user_id/global_state.json
+        save_to/user_id/user_store/
+    """
+    global STORE_PATH, USER_STORE_DIR
+    
+    # Create per-user base directory
+    user_base_dir = Path(save_to) / user_id
+    user_base_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Store path for global state JSON
+    STORE_PATH = user_base_dir / "global_state.json"
+    
+    # Directory for per-user storage files
+    USER_STORE_DIR = user_base_dir / "user_store"
+    USER_STORE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    return STORE_PATH, USER_STORE_DIR
 
 # global placeholders populated by `call_helper_clients_for_user`
 # ensure these exist at module import time so other async functions can reference them
@@ -135,20 +239,240 @@ def save_user_state(user_id: str, user_obj: dict):
 def load_user_state(user_id: str) -> dict:
     user_file = USER_STORE_DIR / f"{user_id}.json"
     if user_file.exists():
-        return load_user_from_file(str(user_file))
+        try:
+            return load_user_from_file(str(user_file))
+        except json.JSONDecodeError as e:
+            print(f"Error loading user state from {user_file}: {e}")
+            print(f"The file may be corrupted. Consider deleting it and recreating the user.")
+            raise
     # fallback to central store
     return _load_store().get("users", {}).get(user_id)
+
+
+async def update_and_save_user_state(user_id: str, save_to: str, update_fn: typing.Callable[[dict], dict]) -> dict:
+    """Load user state, apply updates via callback, and save back to disk.
+    
+    Args:
+        user_id: The user identifier
+        save_to: Base directory where user data is stored
+        update_fn: A callback function (can be sync or async) that takes the loaded user dict and returns the updated user dict
+        
+    Returns:
+        The updated user state dict
+        
+    Example:
+        async def my_updates(user_state):
+            # Access curriculum (stored as List[Curriculum] per User TypedDict)
+            curriculum_list = user_state.get("curriculum")
+            if curriculum_list and isinstance(curriculum_list, list) and len(curriculum_list) > 0:
+                curr = curriculum_list[0]  # Get first curriculum
+                active_ch = curr.get("active_chapter")
+                
+                # Update active chapter status
+                if active_ch and isinstance(active_ch, dict):
+                    active_ch["status"] = Status.COMPLETED.value
+                    
+                    # Update subtopic
+                    sub_topics = active_ch.get("sub_topics", [])
+                    if sub_topics and len(sub_topics) > 0:
+                        sub_topics[0]["status"] = Status.COMPLETED.value
+                        sub_topics[0]["feedback"] = ["Great work!"]
+            
+            return user_state
+        
+        updated = await update_and_save_user_state("babe", "/workspace/mnt/", my_updates)
+    """
+    # Initialize storage paths for this user
+    init_user_storage(save_to, user_id)
+    
+    # Load existing user state
+    user_state = load_user_state(user_id)
+    
+    if not user_state:
+        raise ValueError(f"User {user_id} not found in storage at {save_to}/{user_id}")
+    
+    print(f"Loaded user state for {user_id}")
+    
+    # Apply updates via callback (handle both sync and async callbacks)
+    import inspect
+    if inspect.iscoroutinefunction(update_fn):
+        updated_state = await update_fn(user_state)
+    else:
+        updated_state = update_fn(user_state)
+    
+    # Save back to disk
+    save_user_state(user_id, updated_state)
+    print(f"Saved updated state for {user_id} to {USER_STORE_DIR / f'{user_id}.json'}")
+    
+    return updated_state
+
+
+async def move_to_next_chapter(user_id: str, save_to: str) -> dict:
+    """Convenience function to move user to the next chapter in their curriculum.
+    
+    Args:
+        user_id: The user identifier
+        save_to: Base directory where user data is stored
+        
+    Returns:
+        The updated user state dict
+        
+    This function:
+    - Marks current active chapter as COMPLETED
+    - Moves to next chapter (sets it as active with status STARTED)
+    - Updates the study plan accordingly
+    """
+    async def _move_to_next(user_state: dict) -> dict:
+        curriculum_list = user_state.get("curriculum")
+        
+        # curriculum is stored as List[Curriculum] per User TypedDict definition
+        if not curriculum_list or not isinstance(curriculum_list, list):
+            print("Warning: No curriculum found for user")
+            return user_state
+        
+        if len(curriculum_list) == 0:
+            print("Warning: Curriculum list is empty")
+            return user_state
+        
+        # Get the first (and typically only) curriculum
+        curriculum = curriculum_list[0]
+        
+        if not curriculum or not isinstance(curriculum, dict):
+            print("Warning: Invalid curriculum format")
+            return user_state
+        
+        new_curr = await build_next_chapter(curriculum)
+        user_state["curriculum"] = [convert_to_json_safe(new_curr)]
+        return user_state
+    
+    return await update_and_save_user_state(user_id, save_to, _move_to_next)
+
+
+async def update_subtopic_status(user_id: str, save_to: str, subtopic_number: int, 
+                           new_status: Status, feedback: typing.Optional[typing.List[str]] = None) -> dict:
+    """Update a subtopic's status and optionally add feedback in the active chapter.
+    
+    Args:
+        user_id: The user identifier
+        save_to: Base directory where user data is stored
+        subtopic_number: The subtopic number to update (0-indexed)
+        new_status: New status for the subtopic
+        feedback: Optional list of feedback strings to add
+        
+    Returns:
+        The updated user state dict
+    """
+    def _update_subtopic(user_state: dict) -> dict:
+        curriculum_list = user_state.get("curriculum")
+        
+        # curriculum is stored as List[Curriculum] per User TypedDict definition
+        if not curriculum_list or not isinstance(curriculum_list, list):
+            print("Warning: No curriculum found")
+            return user_state
+        
+        if len(curriculum_list) == 0:
+            print("Warning: Curriculum list is empty")
+            return user_state
+        
+        # Get the first (and typically only) curriculum
+        curriculum = curriculum_list[0]
+        
+        if not curriculum or not isinstance(curriculum, dict):
+            print("Warning: Invalid curriculum format")
+            return user_state
+        
+        active_ch = curriculum.get("active_chapter")
+        
+        if not active_ch or not isinstance(active_ch, dict):
+            print("Warning: No active chapter found")
+            return user_state
+        
+        sub_topics = active_ch.get("sub_topics", [])
+        if not sub_topics or subtopic_number >= len(sub_topics):
+            print(f"Warning: Subtopic {subtopic_number} not found")
+            return user_state
+        
+        subtopic = sub_topics[subtopic_number]
+        
+        if isinstance(subtopic, dict):
+            subtopic["status"] = new_status.value if isinstance(new_status, Status) else new_status
+            print(f"✓ Updated subtopic '{subtopic.get('sub_topic', 'unknown')}' status to {new_status}")
+            
+            if feedback:
+                if "feedback" not in subtopic or not subtopic["feedback"]:
+                    subtopic["feedback"] = []
+                subtopic["feedback"].extend(feedback)
+                print(f"✓ Added {len(feedback)} feedback item(s)")
+        
+        return user_state
+    
+    return await update_and_save_user_state(user_id, save_to, _update_subtopic)
+
+
+async def add_quiz_to_subtopic(user_id: str, save_to: str, subtopic_number: int, quiz: dict) -> dict:
+    """Add a quiz to a specific subtopic in the active chapter.
+    
+    Args:
+        user_id: The user identifier
+        save_to: Base directory where user data is stored
+        subtopic_number: The subtopic number to add quiz to (0-indexed)
+        quiz: Quiz dictionary with keys: question, choices, answer, explanation
+        
+    Returns:
+        The updated user state dict
+    """
+    def _add_quiz(user_state: dict) -> dict:
+        curriculum_list = user_state.get("curriculum")
+        
+        # curriculum is stored as List[Curriculum] per User TypedDict definition
+        if not curriculum_list or not isinstance(curriculum_list, list):
+            print("Warning: No curriculum found")
+            return user_state
+        
+        if len(curriculum_list) == 0:
+            print("Warning: Curriculum list is empty")
+            return user_state
+        
+        # Get the first (and typically only) curriculum
+        curriculum = curriculum_list[0]
+        
+        if not curriculum or not isinstance(curriculum, dict):
+            print("Warning: Invalid curriculum format")
+            return user_state
+        
+        active_ch = curriculum.get("active_chapter")
+        
+        if not active_ch or not isinstance(active_ch, dict):
+            print("Warning: No active chapter found")
+            return user_state
+        
+        sub_topics = active_ch.get("sub_topics", [])
+        if not sub_topics or subtopic_number >= len(sub_topics):
+            print(f"Warning: Subtopic {subtopic_number} not found")
+            return user_state
+        
+        subtopic = sub_topics[subtopic_number]
+        
+        if isinstance(subtopic, dict):
+            if "quizes" not in subtopic or not subtopic["quizes"]:
+                subtopic["quizes"] = []
+            subtopic["quizes"].append(quiz)
+            print(f"✓ Added quiz to subtopic '{subtopic.get('sub_topic', 'unknown')}'")
+        
+        return user_state
+    
+    return await update_and_save_user_state(user_id, save_to, _add_quiz)
 
 
 def parallel_extract_study_materials(subject, sub_topics, pdf_file, num_docs):   
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        # study_materail_create is an async coroutine. Create a small
+        # study_material_gen is an async coroutine. Create a small
         # synchronous wrapper that executes it via `asyncio.run` so the
         # ThreadPoolExecutor receives a regular callable that returns the
         # coroutine result (and avoids un-awaited coroutine warnings).
         def _sync_run(sub_topic):
-            return asyncio.run(study_materail_create(subject, sub_topic, pdf_file, num_docs))
+            return asyncio.run(study_material_gen(subject, sub_topic, pdf_file, num_docs))
 
         future_to_study_material = {executor.submit(_sync_run, sub_topic): sub_topic for sub_topic in sub_topics}
         outputs = []
@@ -202,7 +526,7 @@ async def sub_topic_builder(pdf_loc, subject, pdf_f_name):
             )
             j+=1
             valid_sub_topics.append(sub_topic_temp)
-            sub_topic_ls.append(sub_topic)
+            
             print(Fore.YELLOW + "markdown_pretty_print \n ") 
             print( study_material_str)                
             print("\n\n\n")
@@ -217,27 +541,49 @@ async def build_next_chapter( curriculum : Curriculum ) -> Curriculum :
     study_plan = curriculum["study_plan"]
     next_chapter = curriculum["next_chapter"]
     active_chapter = curriculum["active_chapter"]
-    active_chapter.status = Status.COMPLETED 
-    current_index = active_chapter.number 
-    pdf_file_loc = next_chapter.pdf_loc 
-    chapter_titile = next_chapter.name 
+    
+    # Update active chapter status - handle both dict and object access
+    if isinstance(active_chapter, dict):
+        active_chapter["status"] = Status.COMPLETED.value
+        current_index = active_chapter["number"]
+    else:
+        active_chapter.status = Status.COMPLETED
+        current_index = active_chapter.number
+    
+    # Access next chapter properties - handle both dict and object access  
+    if isinstance(next_chapter, dict):
+        pdf_file_loc = next_chapter["pdf_loc"]
+        chapter_title = next_chapter["name"]
+    else:
+        pdf_file_loc = next_chapter.pdf_loc
+        chapter_title = next_chapter.name 
 
     pdf_f_name=pdf_file_loc.split('/')[-1]
     subject=pdf_f_name.split('.pdf')[0]
     
     subtopics_and_study_material = await sub_topic_builder(pdf_file_loc, subject, pdf_f_name)
     chap=Chapter(
-    number=i,
+    number=current_index + 1,
     name=chapter_title,
     status=Status.STARTED, 
     sub_topics=subtopics_and_study_material,        
     reference=pdf_f_name,
-    pdf_loc = pdf_loc,
+    pdf_loc = pdf_file_loc,
     quizes=[],
     feedback=[])
-    curriculum["active_chapter"]=chap 
-    curriculum["next_chapter"] = study_plan[current_index+1]
-    print(Fore.LIGHTGREEN_EX + " how many chapters = \n", len(chapters), chapters, Fore.RESET)
+    
+    # Convert Chapter to dict for consistency
+    curriculum["active_chapter"] = convert_to_json_safe(chap)
+    
+    # Update next_chapter - access study_plan properly
+    study_plan_chapters = study_plan.get("study_plan", []) if isinstance(study_plan, dict) else study_plan.study_plan
+    if current_index + 2 < len(study_plan_chapters):
+        next_chap = study_plan_chapters[current_index + 2]
+        curriculum["next_chapter"] = convert_to_json_safe(next_chap) if not isinstance(next_chap, dict) else next_chap
+    else:
+        curriculum["next_chapter"] = None
+    
+    print(Fore.LIGHTGREEN_EX + " Moving to next chapter: ", chapter_title, Fore.RESET)
     return curriculum
 
 
@@ -313,12 +659,16 @@ async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_pr
     
     #existing = _load_store().get("users", {}).get(user_id, {})
     
+    # Convert Pydantic Curriculum to JSON-safe dict
+    curriculum_dict = convert_to_json_safe(curriculum)
+    
+    # User TypedDict expects curriculum as List[Curriculum], so wrap in list
     user_dict = {
         "user_id": user["user_id"],
         "study_buddy_preference": user["study_buddy_preference"],
         "study_buddy_persona": persona,
         "study_buddy_name": user["study_buddy_name"],
-        "curriculum": curriculum,
+        "curriculum": [curriculum_dict],  # Wrap in list to match User TypedDict definition
     }
 
     # Save into store
@@ -343,8 +693,18 @@ async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_pr
 async def run_for_first_time_user(user: User, uploaded_pdf_loc: str, save_to:str, study_buddy_preference: str) -> dict:
     """Main entrypoint: ensure user exists, call helper clients if necessary,
     populate states, and return the GlobalState dict.
+    
+    This function initializes per-user storage paths based on save_to and user_id,
+    creating a directory structure for storing GlobalState and user data.
     """
     user_id = user["user_id"]
+    
+    # Initialize per-user storage paths
+    print(f"Initializing storage for user {user_id} at {save_to}...")
+    store_path, user_store_dir = init_user_storage(save_to, user_id)
+    print(f"  - Global state path: {store_path}")
+    print(f"  - User store directory: {user_store_dir}")
+    
     if not user_exists(user_id):
         print(f"User {user_id} not found. Creating minimal user record...")
         create_user_minimal(user)
@@ -382,6 +742,91 @@ if __name__ == "__main__":
     )
     uploaded_pdf_loc=args.pdf_loc
     save_to=args.save_to
+    print(". . . . . . . . . ."*25)
+    print("[FIST_TIME_USER] : populating curriculum for first time user")
     g = asyncio.run(run_for_first_time_user(u,uploaded_pdf_loc,save_to, args.preference))
     # print a JSON-serializable representation of the user
     print(json.dumps(convert_to_json_safe(u), indent=2, ensure_ascii=False))
+    
+    # Example: Demonstrate updating user state
+    print("\n" + "="*60)
+    print("DEMONSTRATION: Update User State Functions")
+    print("="*60)
+    
+    # Example 1: Update a subtopic's status and add feedback
+    print(". . . . . . . . . ."*25)
+    print("\n1. [RETURN USER] : Updating subtopic status with feedback...")
+    try:
+        updated = asyncio.run(update_subtopic_status(
+            user_id=args.user_id,
+            save_to=save_to,
+            subtopic_number=0,
+            new_status=Status.COMPLETED,
+            feedback=["Excellent work!", "All concepts mastered"]
+        ))
+        print("   Success!")
+    except Exception as e:
+        print(f"   (Skipped - user state may not exist yet: {e})")
+    
+    # Example 2: Add a quiz to a subtopic
+    
+    print("\n2. Adding quiz to subtopic...")
+    try:
+        quiz = {
+            "question": "What is the main topic discussed?",
+            "choices": ["Option A", "Option B", "Option C"],
+            "answer": "Option A",
+            "explanation": "This is the correct answer because..."
+        }
+        updated = asyncio.run(add_quiz_to_subtopic(
+            user_id=args.user_id,
+            save_to=save_to,
+            subtopic_number=0,
+            quiz=quiz
+        ))
+        print("   Success!")
+    except Exception as e:
+        print(f"   (Skipped - user state may not exist yet: {e})")
+    
+    # Example 3: Move to next chapter
+    print("\n3. [RETURN USER] : Moving to next chapter ...")
+    
+    try:
+        updated = asyncio.run(move_to_next_chapter(
+            user_id=args.user_id,
+            save_to=save_to
+        ))
+        print("   Success!")
+    except Exception as e:
+        print(f"   (Skipped - user state may not exist yet: {e})")
+    
+    # Example 4: Custom update using update_and_save_user_state
+    """
+    print("\n4. Custom update using callback function...")
+    try:
+        def custom_update(user_state):
+            #### Custom update logic
+            curriculum_list = user_state.get("curriculum")
+            if curriculum_list and len(curriculum_list) > 0:
+                curr = curriculum_list[0]
+                active_ch = curr.get("active_chapter")
+                if active_ch and isinstance(active_ch, Chapter):
+                    # Add custom feedback to chapter
+                    if not active_ch.feedback:
+                        active_ch.feedback = []
+                    active_ch.feedback.append("Custom feedback added via update function")
+                    print("   ✓ Added custom feedback to active chapter")
+            return user_state
+        
+        updated = update_and_save_user_state(
+            user_id=args.user_id,
+            save_to=save_to,
+            update_fn=custom_update
+        )
+        print("   Success!")
+    except Exception as e:
+        print(f"   (Skipped - user state may not exist yet: {e})")
+    
+    print("\n" + "="*60)
+    print("Update demonstrations complete!")
+    print("="*60)"""
