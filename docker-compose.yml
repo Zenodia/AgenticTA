@@ -27,6 +27,7 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
       - DATADOG_EMBEDDING_API_TOKEN=${DATADOG_EMBEDDING_API_TOKEN:-}
       - DATADOG_TOKEN=${DATADOG_TOKEN:-}
+      - AI_WORKBENCH=true  # Enable Docker networking (use service names)
     volumes:
       # Mount source code (for development - changes reflected immediately)
       - .:/workspace
