@@ -1,34 +1,54 @@
 # Use a base image with Python
 FROM python:3.12-slim 
 
-ENV DERBIAN_FRONTEND=noninteractive
+# Set timezone
+ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Stockholm
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
- 
+
+# Install system dependencies
+RUN apt update -y && \
+    apt install -y procps && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /workspace
-COPY . /workspace
-RUN apt update -y 
-#RUN apt install ffmpeg -y
 
+# Upgrade pip
 RUN python -m pip install --upgrade pip
 
-#RUN pip install flash-attn --no-build-isolation
-#RUN pip install transformers qwen-vl-utils accelerate
-#RUN pip install opencv-fixer==0.2.5
-#RUN python -c "from opencv_fixer import AutoFix; AutoFix()"
-RUN pip install -U gretel_client datasets langchain-core langgraph langchain-nvidia-ai-endpoints openai langchain-community faiss-gpu-cu12
-RUN pip install jupyterlab fastmcp colorama markdown gradio
+# Install Python dependencies (copy only requirements.txt)
+# This layer will be cached unless requirements.txt changes
+COPY requirements.txt /workspace/
+RUN pip install -r requirements.txt
 
-COPY . /workspace
-RUN pip install -r requirements.txt 
-RUN pip install nv-ingest==25.9.0 nv-ingest-api==25.9.0 nv-ingest-client==25.9.0 milvus-lite==2.4.12 pypdf
+# Install additional packages
+RUN pip install -U \
+    gretel_client \
+    datasets \
+    langchain-core \
+    langgraph \
+    langchain-nvidia-ai-endpoints \
+    openai \
+    langchain-community \
+    faiss-gpu-cu12 \
+    jupyterlab \
+    fastmcp \
+    colorama \
+    markdown \
+    gradio \
+    nv-ingest==25.9.0 \
+    nv-ingest-api==25.9.0 \
+    nv-ingest-client==25.9.0 \
+    milvus-lite==2.4.12 \
+    pypdf
 
-# Expose port 8888 for JupyterLab
+# Expose ports
 EXPOSE 8888 9999 8000 7860 7861 60808
 
-# Start JupyterLab when the container runs
+# Source code will be mounted as a volume at runtime
+# See docker-compose.yml: volumes: - .:/workspace
+
+# Keep container running
 CMD ["sh", "-c", "tail -f /dev/null"]
-#CMD ["python","memory_mcp_server"]
-#CMD ["jupyter", "lab", "--allow-root", "--ip=0.0.0.0","--NotebookApp.token=''", "--port=8888"]

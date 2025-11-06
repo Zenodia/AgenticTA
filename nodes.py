@@ -593,11 +593,22 @@ async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
     the orchestrator is self-contained.
     """
     
-    chapter_titles_str = chapter_gen_from_pdfs(pdf_files_loc)
+    chapter_titles_str = await chapter_gen_from_pdfs(pdf_files_loc)
     chapter_output=parse_output_from_chapters(chapter_titles_str)
     
-    pdf_files_ls = [os.path.join(pdf_files_loc, item["file_loc"]) for item in chapter_output]
-    chapter_titles_cleaned_ls=[ item["title"] for item in chapter_output]
+    # Filter out invalid items (non-dicts or empty lists) and validate structure
+    valid_chapter_output = [
+        item for item in chapter_output 
+        if isinstance(item, dict) and "file_loc" in item and "title" in item
+    ]
+    
+    if not valid_chapter_output:
+        print("Warning: No valid chapters found in chapter_output. Returning empty list.")
+        print(f"Raw chapter_output: {chapter_output}")
+        return []
+    
+    pdf_files_ls = [os.path.join(pdf_files_loc, item["file_loc"]) for item in valid_chapter_output]
+    chapter_titles_cleaned_ls=[ item["title"] for item in valid_chapter_output]
     chapters=[]
 
     i=0
@@ -642,6 +653,17 @@ async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_pr
     """
     chapters = await build_chapters(pdf_files_loc)
     print(Fore.LIGHTGREEN_EX + "len of chapter is = \n",len(chapters), chapters, '\n\n', Fore.RESET )
+    
+    # Handle case when no chapters are found
+    if len(chapters) == 0:
+        raise ValueError(
+            "No valid chapters found. This typically means:\n"
+            "1. The PDF files directory is empty or invalid\n"
+            "2. The chapter generation failed to produce valid output\n"
+            "3. The PDF files don't have proper structure/content\n"
+            f"PDF location checked: {pdf_files_loc}"
+        )
+    
     study_plan = StudyPlan(study_plan=chapters)
     if len(chapters) == 1:
         curriculum = Curriculum(active_chapter=chapters[0], study_plan=study_plan, status=Status.PROGRESSING)

@@ -11,11 +11,11 @@ import concurrent.futures
 from colorama import Fore
 import os,json
 import argparse
-from dotenv import load_dotenv
-load_dotenv()
 from openai import OpenAI
-from llm_call_utils import llm_call
-import os
+from llm import LLMClient  # This automatically loads dotenv
+
+# Initialize the new LLM client
+llm_client = LLMClient()
 import base64
 from PIL import Image
 import io
@@ -63,6 +63,11 @@ def astra_llm_call(query):
 
 
 def strip_thinking_tag(response):
+    # Handle None or empty responses
+    if response is None or not response:
+        print(Fore.RED + "ERROR: Received None or empty response in strip_thinking_tag" + Fore.RESET)
+        return ""
+    
     if "</think>" in response:
         end_index = response.index("</think>")+8
         output = response[end_index:]
@@ -108,8 +113,13 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
     if len(output)>0 :   
         detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])
         study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
-        llm_parsed_output=llm_call(study_material_generation_prompt_formatted)  
-        #print(Fore.BLUE + "using astra llm call > llm parsed relevent_chunks as context output=\n", llm_parsed_output) 
+        
+        # Use the new LLM client with proper use case
+        llm_parsed_output = await llm_client.call(
+            prompt=study_material_generation_prompt_formatted,
+            use_case="study_material_generation"
+        )
+        #print(Fore.BLUE + "using new LLM client > llm parsed relevent_chunks as context output=\n", llm_parsed_output) 
         #print("---"*10)
         study_material_str=strip_thinking_tag(llm_parsed_output)
         

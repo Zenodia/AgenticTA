@@ -9,19 +9,39 @@ import os
 import json
 import requests
 import argparse
-from dotenv import load_dotenv
-from llm_call_utils import llm_call
+from llm import LLMClient  # This automatically loads dotenv
 from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
-load_dotenv()
-API_KEY=os.environ["ASTRA_TOKEN"]
-headers = {
-    'Content-Type': 'application/json',
-    'Authorization': f'Bearer {API_KEY}',
-}
 
+# Initialize the new LLM client
+llm_client = LLMClient()
+
+# Legacy setup for astra_llm_call (deprecated, unused)
+API_KEY=os.environ.get("ASTRA_TOKEN", "")
+if API_KEY:
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {API_KEY}',
+    }
+else:
+    headers = None
+
+# Legacy LangChain LLM for fallback chains
 llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
 
 def astra_llm_call(query):
+    if not headers:
+        # Fall back to LangChain LLM if ASTRA is not configured
+        from langchain_core.output_parsers import StrOutputParser
+        from langchain_core.prompts import ChatPromptTemplate
+        prompt = ChatPromptTemplate.from_messages([("user", "{query}")])
+        chain = prompt | llm | StrOutputParser()
+        try:
+            output_str = chain.invoke({"query": query})
+        except Exception as e:
+            print(Fore.RED + f"LLM fallback error: {e}" + Fore.RESET)
+            output_str = None
+        return output_str
+    
     json_data = {
         'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
         'messages': [
@@ -232,36 +252,78 @@ chapter_gen_chain = (
 )
 
 
-def chapter_gen_from_pdfs(pdf_files_loc):
+async def chapter_gen_from_pdfs(pdf_files_loc):
+    # Check if directory exists
+    if not os.path.exists(pdf_files_loc):
+        print(Fore.RED + f"ERROR: PDF directory does not exist: {pdf_files_loc}" + Fore.RESET)
+        return "[]"
+    
+    # List PDF files
     pdf_file_names = [f for f in os.listdir(pdf_files_loc) if f.endswith('.pdf')]
+    print(Fore.YELLOW + f"Found {len(pdf_file_names)} PDF files in {pdf_files_loc}:" + Fore.RESET)
+    print(Fore.YELLOW + f"PDF files: {pdf_file_names}" + Fore.RESET)
+    
+    # If no PDFs found, return empty array
+    if not pdf_file_names:
+        print(Fore.RED + "ERROR: No PDF files found in the directory!" + Fore.RESET)
+        return "[]"
+    
     ordered_chapters_prompt=chapter_generation_prompt.format(pdf_file_names=pdf_file_names)
-    output = llm_call(ordered_chapters_prompt)
-    if output :
-        return output
-    else:
-        output=chapter_gen_chain.invoke({"pdf_file_names":pdf_file_names})
-        output = output.content
-        return output
+    
+    # Use the new LLM client with proper use case
+    try:
+        output = await llm_client.call(
+            prompt=ordered_chapters_prompt,
+            use_case="chapter_title_generation"
+        )
+        if output:
+            return output
+    except Exception as e:
+        print(Fore.YELLOW + f"LLM client error, falling back to LangChain: {e}" + Fore.RESET)
+    
+    # Fallback to LangChain if new client fails
+    output = chapter_gen_chain.invoke({"pdf_file_names":pdf_file_names})
+    output = output.content
+    return output
 
 def parse_output_from_chapters(output:str) -> list[dict]:
-    output = output.replace("**curriculum:**", "").replace("1. ", "").replace("2. ", "").split('\n\n')
-    print(type(output), output)
-
-    # Safely attempt to parse each block into JSON. Skip blank/whitespace blocks and log parse errors.
+    # Clean up common formatting
+    output = output.replace("**curriculum:**", "").replace("1. ", "").replace("2. ", "").strip()
+    print(type(output), [output])
+    
     parsed_outputs = []
-    for idx, out in enumerate(output):
-        if not out or not out.strip():
-            continue
-        try:
-            parsed = json.loads(out)
-            parsed_outputs.append(parsed)
-        except json.JSONDecodeError as e:
-            print(Fore.RED + f"JSONDecodeError parsing block {idx}: {e}" + Fore.RESET)
-            print(Fore.RED + "Offending block:\n" + out + Fore.RESET)
-            # continue without aborting; append nothing for this 
-            
-            continue
+    
+    # First, try parsing the entire output as a JSON array
+    try:
+        parsed = json.loads(output)
+        if isinstance(parsed, list):
+            parsed_outputs = parsed
+            print(Fore.GREEN + "Successfully parsed entire output as JSON array" + Fore.RESET)
+        elif isinstance(parsed, dict):
+            parsed_outputs = [parsed]
+            print(Fore.GREEN + "Successfully parsed output as single JSON object" + Fore.RESET)
+    except json.JSONDecodeError:
+        print(Fore.YELLOW + "Output is not a valid JSON array, trying line-by-line parsing..." + Fore.RESET)
+        
+        # If that fails, try parsing each line as a separate JSON object
+        lines = output.split('\n')
+        for idx, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                parsed = json.loads(line)
+                if isinstance(parsed, dict):
+                    parsed_outputs.append(parsed)
+                elif isinstance(parsed, list):
+                    # If a line contains an array, extend our results
+                    parsed_outputs.extend(parsed)
+            except json.JSONDecodeError as e:
+                print(Fore.RED + f"JSONDecodeError parsing line {idx}: {e}" + Fore.RESET)
+                print(Fore.RED + "Offending line:\n" + line + Fore.RESET)
+                continue
 
+    print(Fore.CYAN + f"Parsed {len(parsed_outputs)} chapter(s)" + Fore.RESET)
     print(type(parsed_outputs), parsed_outputs)
     return parsed_outputs
 #### test examples 
@@ -277,8 +339,11 @@ output = process_parallel_titles(summaries, chapters)
 print(type(output), output)"""
 pdf_files_loc="/workspace/mnt/pdfs/"
 """
-output = chapter_gen_from_pdfs(pdf_files_loc)
-chapter_output=parse_output_from_chapters(output)
-for c in chapter_output:
-    print("---"*10)
-    print(type(c), c)"""
+# Test code (requires asyncio.run):
+# import asyncio
+# output = asyncio.run(chapter_gen_from_pdfs(pdf_files_loc))
+# chapter_output=parse_output_from_chapters(output)
+# for c in chapter_output:
+#     print("---"*10)
+#     print(type(c), c)
+"""

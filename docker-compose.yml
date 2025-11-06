@@ -1,0 +1,52 @@
+# Docker Compose for AgenticTA
+# Includes external RAG services from local rag folder
+
+# Include external compose files
+include:
+  - path: ./rag/deploy/compose/vectordb.yaml
+    env_file: ./rag/deploy/compose/.env
+  - path: ./rag/deploy/compose/docker-compose-ingestor-server.yaml
+    env_file: ./rag/deploy/compose/.env
+  - path: ./rag/deploy/compose/docker-compose-rag-server.yaml
+    env_file: ./rag/deploy/compose/.env
+
+services:
+  # ============================================
+  # AgenticTA Application
+  # ============================================
+  
+  agenticta:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ta_master:latest
+    container_name: agenticta
+    environment:
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - ASTRA_TOKEN=${ASTRA_TOKEN:-}
+      - HF_TOKEN=${HF_TOKEN:-}
+      - DATADOG_EMBEDDING_API_TOKEN=${DATADOG_EMBEDDING_API_TOKEN:-}
+      - DATADOG_TOKEN=${DATADOG_TOKEN:-}
+    volumes:
+      # Mount source code (for development - changes reflected immediately)
+      - .:/workspace
+      # Mount PDF directory
+      - ../pdfs/pdfs:/workspace/mnt/pdfs
+      # Exclude Python cache from host (use container's cache)
+      - /workspace/__pycache__
+      - /workspace/llm/__pycache__
+    ports:
+      - "7860:7860"  # Gradio UI
+    depends_on:
+      - rag-server
+      - ingestor-server
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

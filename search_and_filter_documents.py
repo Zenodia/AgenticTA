@@ -21,11 +21,14 @@ from IPython.display import Markdown, display
 import markdown
 from dotenv import load_dotenv
 load_dotenv()
-API_KEY=os.environ["ASTRA_TOKEN"]
-headers = {
-    'Content-Type': 'application/json',
-    'Authorization': f'Bearer {API_KEY}',
-}
+API_KEY=os.environ.get("ASTRA_TOKEN", "")
+if API_KEY:
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {API_KEY}',
+    }
+else:
+    headers = None
 
 llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
 
@@ -34,6 +37,20 @@ def printmd(markdown_str):
 
 
 def astra_llm_call(query):
+    if not headers:
+        # Fall back to LangChain LLM if ASTRA is not configured
+        from langchain_core.output_parsers import StrOutputParser
+        from langchain_core.prompts import ChatPromptTemplate
+        prompt = ChatPromptTemplate.from_messages([("user", "{query}")])
+        chain = prompt | llm | StrOutputParser()
+        try:
+            output_str = chain.invoke({"query": query})
+        except Exception as e:
+            from colorama import Fore
+            print(Fore.RED + f"LLM fallback error: {e}" + Fore.RESET)
+            output_str = None
+        return output_str
+    
     json_data = {
         'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
         'messages': [
@@ -93,8 +110,8 @@ async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : i
     url = f"{BASE_RAG_URL}/v1/search"
     vdb_top_k=int(num_docs*3)
     if pdf_file_name and query :
-        pdf_file_name= pdf_file_name.lower()
-        filter_expr_str=f'content_metadata["source_ref"]=="{pdf_file_name}"'
+        # Use 'like' operator for filename matching (exact == doesn't work with the RAG server)
+        filter_expr_str=f'content_metadata["filename"] like "%{pdf_file_name}%"'
         payload={
         "query": query , # replace with your own query 
         "reranker_top_k": num_docs,
@@ -151,11 +168,22 @@ async def filter_documents_by_file_name(query,pdf_file,num_docs):
         return False, []
 
 if __name__ == "__main__":
-    # Move top-level async calls into an async main to avoid 'await outside function'
-    #query = "fetch information on driving in highway/mortorway"
-    query="\n0: Planning & Overview of Car Education Program"
+    # Test document search with file filter
+    query = "motorway access and restrictions"
     pdf_file = "SwedenDrivingCourse_Motorway.pdf"    
     
-    #output, markdown_str=asyncio.run(filter_documents_by_file_name(query,pdf_file,1))
-    #print("---"*10)
-    #printmd(markdown_str)
+    flag, results = asyncio.run(filter_documents_by_file_name(query, pdf_file, 3))
+    print("---"*10)
+    
+    if flag and results:
+        # Convert results to markdown string
+        markdown_str = "## Search Results\n\n"
+        for idx, result in enumerate(results):
+            markdown_str += f"### Result {idx + 1}\n"
+            markdown_str += f"**Document:** {result.get('document_name', 'N/A')}\n\n"
+            markdown_str += f"**Page:** {result.get('metadata', {}).get('page_number', 'N/A')}\n\n"
+            markdown_str += f"**Content:**\n\n{result.get('content', 'N/A')}\n\n"
+            markdown_str += "---\n\n"
+        print(markdown_str)
+    else:
+        print("No results found or search failed.")

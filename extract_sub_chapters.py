@@ -22,17 +22,15 @@ import concurrent.futures
 from colorama import Fore
 import os,json
 import argparse
-from dotenv import load_dotenv
-load_dotenv()
 from openai import OpenAI
-import os
-from dotenv import load_dotenv
-from llm_call_utils import llm_call
+from llm import LLMClient  # This automatically loads dotenv
 import requests
-import os
+import asyncio
 import re
 from collections import OrderedDict
-load_dotenv()
+
+# Initialize the new LLM client
+llm_client = LLMClient()
 
 API_KEY=os.environ.get("ASTRA_TOKEN", "")
 headers = {
@@ -116,15 +114,24 @@ def get_pdf_pages(pdf_file):
         print(f"Error opening/reading PDF '{pdf_file}': {e}")
         return None, 0
 
-def title_generator(summary,chapter_nr):
-    query=sub_topics_generation_prompt.format(document_summary=summary, chapter_nr=chapter_nr)    
-    output=llm_call(query)
-    if output :
-        return output
-    else:
-        output=sub_topics_gen_chain.invoke({"document_summary":summary,"chapter_nr":chapter_nr})
-        output = output.content
-        return output
+async def title_generator(summary,chapter_nr):
+    query=sub_topics_generation_prompt.format(document_summary=summary, chapter_nr=chapter_nr)
+    
+    # Use the new LLM client with proper use case
+    try:
+        output = await llm_client.call(
+            prompt=query,
+            use_case="subtopic_title_generation"
+        )
+        if output:
+            return output
+    except Exception as e:
+        print(Fore.YELLOW + f"LLM client error, falling back to LangChain: {e}" + Fore.RESET)
+    
+    # Fallback to LangChain if new client fails
+    output = sub_topics_gen_chain.invoke({"document_summary":summary,"chapter_nr":chapter_nr})
+    output = output.content
+    return output
 
 # creating a pdf reader object
 def get_text_from_page(reader,i):
@@ -143,7 +150,8 @@ def get_text_from_page(reader,i):
         return ""
 
     try:
-        output = title_generator(text, i)
+        # Run async title_generator from sync context using asyncio.run
+        output = asyncio.run(title_generator(text, i))
         return output
     except Exception as e:
         print(f"Exception generating title for page {i}: {e}")
