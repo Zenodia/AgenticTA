@@ -1,29 +1,105 @@
 # AgenticTA Setup Guide
 
-Simple guide to start the AgenticTA application and all its dependencies.
+**Comprehensive guide** for setting up, configuring, and troubleshooting AgenticTA.
 
-## Prerequisites
-
-- Docker with GPU support
-- NVIDIA GPU drivers
-- Environment variables set (see `envsetup.sh`)
+> **Quick Start?** See [QUICKSTART.md](QUICKSTART.md) to get running in 3 minutes.
 
 ---
 
-## 🚀 Quick Start (2 Commands!)
+## 📋 Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Initial Setup](#initial-setup)
+- [Architecture](#architecture)
+- [Available Commands](#available-commands)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+
+---
+
+## Prerequisites
+
+### Required
+- **Docker** with GPU support (Docker Compose V2)
+- **NVIDIA GPU** with drivers installed
+- **NVIDIA Container Toolkit** configured
+- **NVIDIA API Key** (get from https://build.nvidia.com)
+
+### System Requirements
+- **Disk Space**: 20GB+ free
+- **RAM**: 16GB+ recommended
+- **GPU**: 8GB+ VRAM recommended
+
+### Check Prerequisites
 
 ```bash
-# 1. Start everything
-make up
+# Check Docker
+docker --version
+docker compose version
 
-# 2. Start Gradio UI
-make gradio
+# Check NVIDIA drivers
+nvidia-smi
 
-# 3. Open browser
-open http://localhost:7860
+# Check GPU in Docker
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
 ```
 
-That's it! All services are now running. 🎉
+---
+
+## Initial Setup
+
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/your-org/AgenticTA.git
+cd AgenticTA
+```
+
+### 2. Set Environment Variables
+
+Create `.env` file:
+
+```bash
+# Required
+NVIDIA_API_KEY=nvapi-xxx...
+
+# Optional (for enhanced models)
+ASTRA_TOKEN=xxx...
+
+# Optional (if using other providers)
+OPENAI_API_KEY=sk-xxx...
+ANTHROPIC_API_KEY=xxx...
+```
+
+### 3. Start Services
+
+```bash
+# Start all services
+make up
+
+# Wait ~30 seconds for services to initialize
+# Check status
+make status
+
+# Start Gradio UI
+make gradio
+```
+
+### 4. Verify Installation
+
+```bash
+# Check all services are running
+make status
+
+# Test LLM module
+make test
+
+# View logs
+make logs
+```
+
+Open http://localhost:7860 to access the UI.
 
 ---
 
@@ -63,7 +139,9 @@ make restart-gradio  # Restart Gradio only
 
 ---
 
-## 🎯 What `make up` Does
+## Architecture
+
+### What `make up` Does
 
 Starts all required services in the correct order:
 
@@ -84,9 +162,7 @@ Starts all required services in the correct order:
 - Volume management
 - GPU allocation
 
----
-
-## 🌐 Service URLs
+### Service URLs
 
 Once running, access services at:
 
@@ -101,55 +177,7 @@ Once running, access services at:
 
 ---
 
-## 📖 Step-by-Step Guide
-
-### First Time Setup
-
-```bash
-# 1. Clone repository (if not already done)
-cd /home/ubuntu/AgenticTA
-
-# 2. Set environment variables
-source envsetup.sh
-
-# 3. Start all services
-make up
-# This will:
-# - Build the Docker image
-# - Start all 9 services
-# - Wait for health checks
-# - Show you the URLs
-
-# 4. Start Gradio UI
-make gradio
-
-# 5. Open browser to http://localhost:7860
-```
-
-### Daily Workflow
-
-```bash
-# Morning - start services if stopped
-make up
-
-# Check what's running
-make status
-
-# Start Gradio
-make gradio
-
-# During development
-make logs        # Watch logs
-make shell       # Debug in container
-make test        # Test LLM module
-
-# End of day (optional - can leave running)
-make down        # Stop all services
-```
-
----
-
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Check Service Status
 
@@ -209,9 +237,7 @@ make restart-gradio
 make logs-gradio
 ```
 
----
-
-## 🧪 Testing
+### Testing
 
 ### Test LLM Module
 
@@ -241,9 +267,7 @@ curl http://localhost:8082/v1/health
 make health
 ```
 
----
-
-## 🔄 Updating
+### Updating
 
 ### After Code Changes
 
@@ -268,9 +292,7 @@ vim requirements.txt
 make rebuild
 ```
 
----
-
-## 📊 Monitoring
+### Monitoring
 
 ### View Logs
 
@@ -304,9 +326,7 @@ docker system df
 make status
 ```
 
----
-
-## 🧹 Cleanup
+### Cleanup
 
 ### Stop Services
 
@@ -332,7 +352,7 @@ make rebuild
 
 ---
 
-## 🎓 Understanding the Stack
+## Configuration
 
 ### Service Dependencies
 
@@ -358,9 +378,7 @@ agenticta (your app)
 5. Results shown in → Gradio UI
 ```
 
----
-
-## 🔧 Configuration
+### LLM Configuration
 
 ### Environment Variables
 
@@ -390,7 +408,44 @@ Edit `docker-compose.yml` to:
 
 ---
 
-## 💡 Tips & Best Practices
+## Development
+
+### Daily Workflow
+
+```bash
+# Morning - start services
+make up && make gradio
+
+# Check status
+make status
+
+# Watch logs while developing
+make logs
+
+# Test changes
+make test
+
+# Restart after code changes
+make restart-gradio
+
+# Enter container for debugging
+make shell
+
+# End of day (optional - can leave running)
+make down
+```
+
+### After Code Changes
+
+```bash
+# Python code changed (source is mounted, just restart Gradio)
+make restart-gradio
+
+# Dockerfile or requirements.txt changed
+make rebuild
+```
+
+### Tips & Best Practices
 
 ### Performance
 
@@ -411,18 +466,13 @@ Edit `docker-compose.yml` to:
 - Configure log rotation
 - Set up alerts for service failures
 
----
+### Additional Resources
 
-## 📚 Additional Resources
+- **Quickstart**: See [QUICKSTART.md](QUICKSTART.md)
+- **LLM Module**: See [llm/README.md](llm/README.md)
+- **Main README**: See [README.md](README.md)
 
-- **LLM Module**: See `llm/README.md`
-- **Migration Guide**: See `LLM_MIGRATION_GUIDE.md`
-- **Quick Reference**: See `LLM_QUICK_REFERENCE.md`
-- **Compose Options**: See `COMPOSE_OPTIONS.md`
-
----
-
-## ❓ FAQ
+### FAQ
 
 **Q: Do I need to rebuild after changing Python code?**  
 A: No, just `make restart-gradio`. Files are mounted.
@@ -444,7 +494,7 @@ A: Volumes in `./rag/deploy/compose/volumes/` directory.
 
 ---
 
-## 🎉 Success!
+## Success!
 
 If you can access http://localhost:7860 and see the Gradio UI, you're all set!
 
