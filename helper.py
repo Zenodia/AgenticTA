@@ -1,7 +1,8 @@
 from study_buddy_client import study_buddy_client_requests
 from agent_mem_client import agentic_mem_mcp_client
-from quiz_gen_client import quiz_generation_client
-from chapter_gen import process_parallel_titles
+#from quiz_gen_client import quiz_generation_client
+#from chapter_gen import process_parallel_titles
+from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
 from threading import Thread
 import os
 import typing

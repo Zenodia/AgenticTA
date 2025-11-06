@@ -21,7 +21,7 @@ _strict_response_validation=False
 learner = SelfLearner(embedding_model="miniLM")
 
 # Define our task and original prompt
-task = "Write a product description for a smartphone"
+task = "Write a product description for a smartphone, elaborate it to full feature list and competitiveness of using this smart phone over other brand"
 base_prompt = "You are a copywriter."
 
 # Generate text without feedback

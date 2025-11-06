@@ -8,7 +8,8 @@ import time
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status
 from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe
-from test_orchestrator import run_for_user
+import asyncio
+from nodes import run_for_first_time_user
 # Sample data for demonstration
 SAMPLE_CURRICULUM = [
     "Introduction to Biology",
@@ -43,44 +44,109 @@ SAMPLE_QUIZ_DATA = {
     ]
 }
 
-def generate_curriculum(file_obj):
+def generate_curriculum(file_obj, progress=gr.Progress()):
     """Generate curriculum from uploaded PDF or use sample data"""
     print(Fore.CYAN + "file_objs = \n", type(file_obj), file_obj)
 
-    if file_obj:       
-        
-        # In a real app, you would extract content from PDF here
-        # For demo, we'll just return sample curriculum
-        new_ls=[shutil.copy(f, "/workspace/mnt/pdfs/") for f in file_obj]
-        print(Fore.CYAN + "new_ls =\n", new_ls)
-        print(os.listdir("/workspace/mnt/pdfs/"), Fore.RESET)
-        u=User(
-        user_id="user",
-        study_buddy_preference="someone who has patience, a good sense of humor, can make boring subject fun.", 
-        study_buddy_name="ollie", 
-        study_buddy_persona=None,
-        )
-        uploaded_pdf_loc="/workspace/mnt/pdfs/"
-        save_to="/workspace/mnt/"
-        g = run_for_user(u,uploaded_pdf_loc,save_to)
-        #print(Fore.YELLOW + "gstate=\n", type(g),g)
-        _study_plan=g["user"]["curriculum"]["study_plan"]
-        print(type(_study_plan), _study_plan)
-        if isinstance(_study_plan,dict):
-            study_plan = _study_plan["study_plan"]
-        else:
-            study_plan=_study_plan.study_plan
-        print("---"*10)
-        print("\n\n",type(study_plan), study_plan)
-        if isinstance(study_plan[0], dict):
-            curriculum=[f"Chapter {str(c["number"])}: Extracted Topic {c["name"].split(':')[1]}" for c in study_plan]
-        else:
-            curriculum=[f"Chapter {str(c.number)}: Extracted Topic {c.name.split(':')[1]}" for c in study_plan]
-        #curriculum = [f"Chapter {i+1}: Extracted Topic {i+1}" for i in range(5)]
-        print(curriculum)
+    if file_obj:
+        try:
+            progress(0.05, desc="Cleaning up old files...")
+            # Clear the PDF directory to ensure fresh generation
+            pdf_dir = "/workspace/mnt/pdfs/"
+            if os.path.exists(pdf_dir):
+                for f in os.listdir(pdf_dir):
+                    file_path = os.path.join(pdf_dir, f)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                    except Exception as e:
+                        print(f"Error deleting {file_path}: {e}")
+            
+            progress(0.1, desc="Copying PDF files...")
+            # Copy new PDF files
+            new_ls=[shutil.copy(f, pdf_dir) for f in file_obj]
+            print(Fore.CYAN + "new_ls =\n", new_ls)
+            print(os.listdir(pdf_dir), Fore.RESET)
+            
+            # Generate a unique user ID based on timestamp to force fresh generation
+            import time
+            user_id = f"user_{int(time.time())}"
+            
+            progress(0.15, desc="Initializing user...")
+            u=User(
+            user_id=user_id,
+            study_buddy_preference="someone who has patience, a good sense of humor, can make boring subject fun.", 
+            study_buddy_name="ollie", 
+            study_buddy_persona=None,
+            )
+            uploaded_pdf_loc="/workspace/mnt/pdfs/"
+            save_to="/workspace/mnt/"
+            study_buddy_preference = "someone who has patience, a good sense of humor, can make boring subject fun."
+            
+            progress(0.3, desc="Generating curriculum (this may take a few minutes)...")
+            g = asyncio.run(run_for_first_time_user(u, uploaded_pdf_loc, save_to, study_buddy_preference))
+            
+            progress(0.8, desc="Processing study plan...")
+            print(Fore.YELLOW + f"gstate type: {type(g)}" + Fore.RESET)
+            
+            # g["user"]["curriculum"] is a List[Curriculum]
+            # Each Curriculum object has a study_plan attribute
+            study_plan = []
+            if isinstance(g, dict) and "user" in g:
+                user_data = g["user"]
+                print(f"User data type: {type(user_data)}")
+                
+                # Handle both dict and object access
+                if isinstance(user_data, dict):
+                    curriculum_list = user_data.get("curriculum", [])
+                else:
+                    # If it's an object, try attribute access
+                    curriculum_list = getattr(user_data, "curriculum", [])
+                
+                print(f"Curriculum list type: {type(curriculum_list)}, length: {len(curriculum_list) if curriculum_list else 0}")
+                
+                if curriculum_list and len(curriculum_list) > 0:
+                    # Get the first curriculum object
+                    first_curriculum = curriculum_list[0]
+                    print(f"First curriculum type: {type(first_curriculum)}")
+                    
+                    # Extract study_plan
+                    if isinstance(first_curriculum, dict):
+                        study_plan_data = first_curriculum.get("study_plan", [])
+                    else:
+                        study_plan_data = getattr(first_curriculum, "study_plan", [])
+                    
+                    # study_plan_data might be a StudyPlan object or dict
+                    if isinstance(study_plan_data, dict):
+                        study_plan = study_plan_data.get("study_plan", [])
+                    elif hasattr(study_plan_data, "study_plan"):
+                        study_plan = study_plan_data.study_plan
+                    else:
+                        study_plan = study_plan_data if isinstance(study_plan_data, list) else []
+                    
+                    print(f"Study plan type: {type(study_plan)}, length: {len(study_plan) if study_plan else 0}")
+            
+            if study_plan and len(study_plan) > 0:
+                # Extract chapter info based on type
+                if isinstance(study_plan[0], dict):
+                    curriculum = [f"Chapter {str(c['number'])}: {c['name']}" for c in study_plan]
+                else:
+                    curriculum = [f"Chapter {str(c.number)}: {c.name}" for c in study_plan]
+                print(Fore.GREEN + f"Successfully generated {len(curriculum)} chapters" + Fore.RESET)
+                print(curriculum)
+            else:
+                print(Fore.RED + "ERROR: No chapters found in study plan!" + Fore.RESET)
+                curriculum = SAMPLE_CURRICULUM.copy()
+            
+        except Exception as e:
+            print(Fore.RED + f"ERROR generating curriculum: {str(e)}" + Fore.RESET)
+            import traceback
+            traceback.print_exc()
+            curriculum = SAMPLE_CURRICULUM.copy()
     else:
         curriculum = SAMPLE_CURRICULUM.copy()
     
+    progress(0.9, desc="Creating UI components...")
     # Create chapter buttons (10 max)
     outputs = [gr.Column(visible=True)]
     for i in range(10):
@@ -88,6 +154,8 @@ def generate_curriculum(file_obj):
             outputs.append(gr.Button(curriculum[i], visible=True))
         else:
             outputs.append(gr.Button(visible=False))
+    
+    progress(1.0, desc="Done!")
     return outputs
 
 def mark_chapter_complete(chapter_name, progress=gr.Progress()):
@@ -305,4 +373,4 @@ demo.css = """
 """
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=True)

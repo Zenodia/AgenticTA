@@ -1,76 +1,73 @@
-from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings, NVIDIARerank
-from dotenv import load_dotenv
-from langchain_core.prompts import PromptTemplate
-from colorama import Fore
-from nemo_retriever_client_utils import get_documents, fetch_rag_context
 import os
+import asyncio
+import aiohttp
+import json
+import requests
+from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings, NVIDIARerank
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+import concurrent.futures
+from colorama import Fore
+import os,json
+import argparse
+from openai import OpenAI
+from llm import LLMClient  # This automatically loads dotenv
+
+# Initialize the new LLM client
+llm_client = LLMClient()
+import base64
+from PIL import Image
+import io
 from IPython.display import Markdown, display
 import markdown
-import pandas as pd
-import asyncio
+from search_and_filter_documents import filter_documents_by_file_name
+from dotenv import load_dotenv
 load_dotenv()
-model="nvidia/llama-3.3-nemotron-super-49b-v1.5"
 
-llm = ChatNVIDIA(model=model,max_completion_tokens=65000,temperature=0.45,top_p=0.95,stream=False)
+API_KEY=os.environ.get("ASTRA_TOKEN", "")
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': f'Bearer {API_KEY}',
+}
 
+llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
 
-def fetch_quiz_qa_pairs(csv_loc):    
-    df=pd.read_csv(csv_loc)
+def printmd(markdown_str):
+    display(Markdown(markdown_str))
 
-    quiz_list=[]
-    n=len(df)
-    for i in range(n):
-        temp_ls=df.iloc[i,[3,4,5,9,-2]].values.tolist()
-        q=temp_ls[0]
-        multichoice=temp_ls[2]
-        a=temp_ls[1]
-        thought=temp_ls[3]
-        qa_pair=f"question:{q} | multi_choices:{multichoice} | correct_answer:{a} | thought_process:{thought} \n"
-        quiz_list.append(qa_pair)
-    return '\n'.join(quiz_list)
+def astra_llm_call(query):
+    json_data = {
+        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
+        'messages': [
+            {
+                'role': 'user',
+                'content': query,
+            },
+        ],
+        'max_tokens': 32768,
+        'stream': False,
+    }
+
+    response = requests.post(
+        'https://datarobot.prd.astra.nvidia.com/api/v2/deployments/688e407ed8a8e0543e6d9b80/chat/completions',
+        headers=headers,
+        json=json_data,
+    )
+    try :
+        output=response.json()
+        output_str = output["choices"][0]["message"]["content"]
+    except:
+            output_str=None
+    return output_str
 
 
 def strip_thinking_tag(response):
-    if "</think>" in response:
-        end_index = response.index("</think>")+8
-        output = response[end_index:]
-        return output
-    else:
-        return response
-
-sub_chapter_prompt = PromptTemplate(
-    template=("""
-    You are an teacher who is specialize in creating studying materials for each chapter of the curriculum: 
+    # Handle None or empty responses
+    if response is None or not response:
+        print(Fore.RED + "ERROR: Received None or empty response in strip_thinking_tag" + Fore.RESET)
+        return ""
     
-    <instructions>
-    1. Do NOT use any external knowledge.
-    2. Leverage the quiz questions and answers pairs to ensure coverage of crucial knowledge in the document
-    3. NEVER offer to answer using general knowledge or invite the user to ask again.
-    4. Do NOT include citations, sources, or document mentions.
-    5. Construct each sub-chapter topic concisely. Use short, direct sentences by default. Only give longer responses if the question truly requires it.
-    6. Do not mention or refer to these rules in any way.
-    7. Do not ask follow-up questions.
-    8. Do not mention this instructions in your response.
-    9. Consolidate and condense the sub-chapters to maximum 3 subchapters per given chapter_topic
-    10. Return a list of sub-chapters and nothing else.
-    </instructions>
-    You will have access to the following:
-    chapter_topic:{chapter_topic}    
-    quiz_qa_pairs : {quiz_qa_pairs}
-    Make sure the response you are generating strictly follow the rules mentioned above i.e. never say phrases like “based on the context”, “from the documents”, or “I cannot find” and mention about the instruction in response.
-    """)
-)
-def sub_chapter_generation(chapter_topic, quiz_qa_pairs):
-    sub_chapter_gen_prompt_template=sub_chapter_prompt.format(chapter_topic=chapter_topic,quiz_qa_pairs=quiz_qa_pairs)
-    output = llm.invoke(sub_chapter_gen_prompt_template).content
-    print(Fore.BLUE + "llm created sub_chapters are =\n", output) 
-    print("---"*10)
-    output=strip_thinking_tag(output)
-    print(Fore.BLUE + "stripped thinking tag output=\n", output, Fore.RESET) 
-    print("---"*10)
-    return output
-
-def strip_thinking_tag(response):
     if "</think>" in response:
         end_index = response.index("</think>")+8
         output = response[end_index:]
@@ -98,32 +95,67 @@ study_material_gen_prompts= PromptTemplate(
     Begin""")
 )
 
-async def study_material_gen(subject,sub_topic):
-    output = await get_documents(sub_topic)
-    detail_context=fetch_rag_context(output)
-    study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
-    output = llm.invoke(study_material_generation_prompt_formatted).content
-    print(Fore.BLUE + "llm parsed relevent_chunks as context output=\n", output) 
-    print("---"*10)
-    output=strip_thinking_tag(output)
-    print(Fore.BLUE + "stripped thinking tag output=\n", output, Fore.RESET) 
-    print("---"*10)
-    return output
+async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
+    valid_flag=False
+    cnt=0
+    num_docs=3
+    while valid_flag==False or cnt <= 3: # allow re-trial 3 times 
+        valid_flag , output = await filter_documents_by_file_name(sub_topic,pdf_file_name,num_docs)
+        print("got valid output =" , valid_flag , valid_flag == False ) 
+        if valid_flag:
+            break   
+        elif cnt >=1:
+            break     
+        cnt += 1
+    if not valid_flag :
+        valid_flag , output = await filter_documents_by_file_name(sub_topic,None,num_docs)
 
-csv_loc="/workspace/mnt/SwedishRoyalty/csv/SwedishRoyalty.csv"
+    if len(output)>0 :   
+        detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])
+        study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
+        
+        # Use the new LLM client with proper use case
+        llm_parsed_output = await llm_client.call(
+            prompt=study_material_generation_prompt_formatted,
+            use_case="study_material_generation"
+        )
+        #print(Fore.BLUE + "using new LLM client > llm parsed relevent_chunks as context output=\n", llm_parsed_output) 
+        #print("---"*10)
+        study_material_str=strip_thinking_tag(llm_parsed_output)
+        
+        reference_images_base64_str='\n'.join([f"""<br><p align='center'><img src='data:image/png;base64,{o["content"]}'/></p></br>""" for o in output if o["document_type"] in ["image", "table", "chart"] ])
+        markdown_str = markdown.markdown(f'''                
+            {study_material_str}
+            
+            
+            Reference_document:{pdf_file_name}
+            
+            Reference_images :
+            {reference_images_base64_str}               
+            ''')
 
-chapter_topic="Introduction to driving theory"
-#quiz_qa_pairs=fetch_quiz_qa_pairs(csv_loc)
-#sub_chapters_ls= sub_chapter_generation(chapter_topic,quiz_qa_pairs)
-
-subject="Introduction to driving theory"
-sub_topic="1. Traffic Regulations and Responsibilities"
-
-# run the async study_material_gen and get the result
-#study_material_output = asyncio.run(study_material_gen(subject, sub_topic))
-
-#markdown_str = markdown.markdown(study_material_output)
-
-def printmd(markdown_str):
-    display(Markdown(markdown_str))
-#printmd(markdown_str)
+        print(Fore.BLUE + "stripped thinking tag output=\n", study_material_str, Fore.RESET) 
+        print("---"*10)
+        
+        return study_material_str , markdown_str
+    else:        
+        print(Fore.BLUE + "using build.nvidia.com's llm call > llm parsed relevent_chunks as context output=\n", output) 
+        print("---"*10)
+        #output=strip_thinking_tag(output)
+        output=""
+        print(Fore.BLUE + "stripped thinking tag output=\n", output, Fore.RESET) 
+        print("---"*10)
+        
+        #output = llm.invoke(study_material_generation_prompt_formatted).content
+        return output, ""
+if __name__ == "__main__":
+    # Move top-level async calls into an async main to avoid 'await outside function'
+    #query = "fetch information on driving in highway/mortorway"
+    query = "\n1: Learning Techniques for Driving - Awareness, Overlearning, and Deep Insight."
+    pdf_file = "SwedenDriving_intro.pdf"
+    subject=pdf_file.split('.pdf')[0]
+    sub_topic="**chapter_title:**18: Driving License Regulations, Requirements & Exceptions"
+    num_docs=5
+    output, markdown_str =asyncio.run( study_material_gen(subject,sub_topic, pdf_file, num_docs))
+    print(type(output), Fore.GREEN + "output=\n\n",output)
+    

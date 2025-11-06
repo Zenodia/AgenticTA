@@ -1,0 +1,65 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+
+# Virtual environments
+.venv
+venv
+ENV
+env
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+*.tmp
+tmp/
+
+# Data and outputs
+mnt/
+pdfs/
+*.pdf
+*.csv
+*.parquet
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation (not needed in image)
+*.md
+docs/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.bak
+*.swp
+*.tmp
+.cache/
+
