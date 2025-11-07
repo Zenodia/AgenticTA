@@ -15,56 +15,8 @@ from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_proces
 # Initialize the new LLM client
 llm_client = LLMClient()
 
-# Legacy setup for astra_llm_call (deprecated, unused)
-API_KEY=os.environ.get("ASTRA_TOKEN", "")
-if API_KEY:
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {API_KEY}',
-    }
-else:
-    headers = None
-
-# Legacy LangChain LLM for fallback chains
-llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
-
-def astra_llm_call(query):
-    if not headers:
-        # Fall back to LangChain LLM if ASTRA is not configured
-        from langchain_core.output_parsers import StrOutputParser
-        from langchain_core.prompts import ChatPromptTemplate
-        prompt = ChatPromptTemplate.from_messages([("user", "{query}")])
-        chain = prompt | llm | StrOutputParser()
-        try:
-            output_str = chain.invoke({"query": query})
-        except Exception as e:
-            print(Fore.RED + f"LLM fallback error: {e}" + Fore.RESET)
-            output_str = None
-        return output_str
-    
-    json_data = {
-        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
-        'messages': [
-            {
-                'role': 'user',
-                'content': query,
-            },
-        ],
-        'max_tokens': 512,
-        'stream': False,
-    }
-
-    response = requests.post(
-        'https://datarobot.prd.astra.nvidia.com/api/v2/deployments/688e407ed8a8e0543e6d9b80/chat/completions',
-        headers=headers,
-        json=json_data,
-    )
-    try :
-        output=response.json()
-        output_str = output["choices"][0]["message"]["content"]
-    except:
-            output_str=None
-    return output_str
+# Legacy LangChain LLM for fallback chains only
+llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
 
 
 

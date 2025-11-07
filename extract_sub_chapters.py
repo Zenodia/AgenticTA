@@ -32,39 +32,8 @@ from collections import OrderedDict
 # Initialize the new LLM client
 llm_client = LLMClient()
 
-API_KEY=os.environ.get("ASTRA_TOKEN", "")
-headers = {
-    'Content-Type': 'application/json',
-    'Authorization': f'Bearer {API_KEY}',
-}
-
-
-llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
-
-def astra_llm_call(query):
-    json_data = {
-        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
-        'messages': [
-            {
-                'role': 'user',
-                'content': query,
-            },
-        ],
-        'max_tokens': 512,
-        'stream': False,
-    }
-
-    response = requests.post(
-        'https://datarobot.prd.astra.nvidia.com/api/v2/deployments/688e407ed8a8e0543e6d9b80/chat/completions',
-        headers=headers,
-        json=json_data,
-    )
-    try :
-        output=response.json()
-        output_str = output["choices"][0]["message"]["content"]
-    except:
-            output_str=None
-    return output_str
+# Legacy LangChain LLM for fallback chains only
+llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
 
 
 sub_topics_generation_prompt = """You are an expert in generation short chapter title to outline the studying curriculum.
@@ -233,17 +202,18 @@ def post_process_extract_sub_chapters(output):
             sub_chapters.append(o[strip_o:])
     ordered_subchapters = sort_list_by_prefix(sub_chapters)
     return ordered_subchapters
-"""
-path_to_pdf_file="/workspace/mnt/pdfs/SwedenDriving_intro.pdf"
-output = parallel_extract_pdf_page_and_text(path_to_pdf_file)
 
-output = post_process_extract_sub_chapters(output)
 
-i=0
-for p_text in output:
-    print(f" ---------------------- extracted page number: {str(i)} ---------------------------")
-    print(p_text)
-    i+=1
-print('\n'.join(output))"""
+if __name__ == "__main__":
+    path_to_pdf_file="/workspace/mnt/pdfs/SwedenDriving_intro.pdf"
+    output = parallel_extract_pdf_page_and_text(path_to_pdf_file)
+    output = post_process_extract_sub_chapters(output)
+
+    i=0
+    for p_text in output:
+        print(f" ---------------------- extracted page number: {str(i)} ---------------------------")
+        print(p_text)
+        i+=1
+    print('\n'.join(output))"""
 
 
