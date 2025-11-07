@@ -15,8 +15,9 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 from langgraph.graph import END, StateGraph
-from nodes import init_user_storage,user_exists,load_user_state, update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter
-from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic
+import asyncio
+from nodes import init_user_storage,user_exists,load_user_state, update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
+from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic, printmd
 
 """
 ## copy GlobalState here for reference 
@@ -55,12 +56,16 @@ def check_user(data):
         data["user"]=user_state
     else:        
         data["intermediate_steps"].append("first_time_user_setup")
-        data["next_node_name"]= "query_routing"
+        data["next_node_name"]= "continue"
     return data
 
 
 def query_routing(data):
     existing_user = data["existing_user"]
+    if existing_user :
+        u=data["user"]
+    
+
     ## first time user invoke creation of curriculum 
     query=data["input"]
     # llm should classify the query into one of the following 
@@ -70,12 +75,20 @@ def query_routing(data):
     ## next_sub_topic : completed this sub_topic and move on to next sub_topic
     ## chitchat : sometimes one needs to relax and chitchat that has nothing to do with studying nor the material 
     ## save_and_quit : if user is too tired to go on and would like to save the current progress and quit , but resume later on.
+    
+    # Check if intermediate_steps already has a tool to execute
+    if data.get("intermediate_steps"):
+        # If there are already intermediate steps, continue to execute_tools
+        print(Fore.CYAN +"Node = **query_routing** > Found existing intermediate_steps: ", data["intermediate_steps"])
+        print("Node = **query_routing** > data : ", data.keys() , Fore.RESET)
+        return "continue"
+    
     if not data["next_node_name"]:
         output  = random.sample(["study_session","quiz", "next_sub_topic", "next_chapter","chitchat","save_and_quit", "end", "first_time_user_setup"],1)
     else:
         output= data["next_node_name"]
     print(Fore.CYAN +"Node = **query_routing** > output : ", output )    
-    print("Node = **query_routing** > data : ", data , Fore.RESET)
+    print("Node = **query_routing** > data : ", data.keys() , Fore.RESET)
     
     if "study_session" in output:
         data["intermediate_steps"].append("study_session")
@@ -105,6 +118,9 @@ def query_routing(data):
 
 def execute_tools(data):
     existing_user = data["existing_user"]
+    if existing_user :
+        u=data["user"]
+    
     ## first time user invoke creation of curriculum 
     query=data["input"]
     # llm should classify the query into one of the following 
@@ -121,10 +137,23 @@ def execute_tools(data):
     print(Fore.MAGENTA + "Node = **execute_tool** > executing tool : ", tool )
     print("Node = **execute_tool** > data : ", data , Fore.RESET)
     if "study_session" in tool :
-        c=user_state["curriculum"][0]
-        active_chapter=c["active_chapter"]        
-        response = f"Let's start by studying \n chapter {str(active_chapter.number)}:{active_chapter.name} >>> \n 1st study-topic {active_chapter.sub_topics[0].sub_topic} >>> \n study material - \n {active_chapter.sub_topics[0].study_material}"
-        data["agent_final_output"]=response
+        # Load user state if it exists
+        if existing_user:
+            
+            c=u["curriculum"][0]
+            active_chapter=c["active_chapter"]        
+            response = f"""
+            ### Chapter {str(active_chapter.number)}: {active_chapter.name}
+
+            #### 1st Study Topic: {active_chapter.sub_topics[0].sub_topic}
+
+            **Study Material:**
+
+            {active_chapter.sub_topics[0].study_material}"""
+
+            data["agent_final_output"]=response
+        else:
+            data["agent_final_output"]="User not found. Please set up user first."
     elif "next_chapter" in tool :
         
         data["agent_final_output"]="move to next chapter"
@@ -198,9 +227,9 @@ workflow.add_conditional_edges(
     },
 )
 
-# We now add a normal edge from `tools` to `agent`.
-# This means that after `tools` is called, `agent` node is called next.
-workflow.add_edge("execute_tools", "check_user")
+# We now add a normal edge from `execute_tools` to END.
+# This means that after `execute_tools` is called, the graph finishes.
+workflow.add_edge("execute_tools", END)
 
 # Finally, we compile it!
 # This compiles it into a LangChain Runnable,
@@ -208,22 +237,29 @@ workflow.add_edge("execute_tools", "check_user")
 app = workflow.compile()
 
 
-inputs={
-    "user_id": "babe",     
-    "input": "make a curriculum for me", 
-    "pdf_loc": "/workspace/mnt/pdfs", 
-    "save_to": "workspace/mnt/",
-    "chat_history": [],
-    "next_node_name": "",
-    "agent_final_output": None,
-    "intermediate_steps": ["study_session"]
-}
-#ipython kernel install --user --name=my-conda-env-kernel   # configure Jupyter to use Python kernel
-out=app.invoke(inputs)
+if __name__ == "__main__":
+    # Test code - only runs when script is executed directly
+    inputs={
+        "user_id": "babe",     
+        "input": "make a curriculum for me", 
+        "pdf_loc": "/workspace/mnt/pdfs", 
+        "save_to": "/workspace/mnt/",
+        "chat_history": [],
+        "next_node_name": "",
+        "agent_final_output": None,
+        "intermediate_steps": ["study_session"]
+    }
+    #ipython kernel install --user --name=my-conda-env-kernel   # configure Jupyter to use Python kernel
+    out=app.invoke(inputs)
 
-print(out["intermediate_steps"])
-print("--"*10)
-print(out["agent_final_output"])
+    print(out["intermediate_steps"])
+    print("--"*10)
+    print(Fore.LIGHTGREEN_EX+"type", type(out["agent_final_output"]))
+    if out["agent_final_output"]:
+        # printmd expects a string with markdown formatting
+        
+        print(out["agent_final_output"], Fore.RESET)
+
 """
 save_to="/workspace/mnt/"
 user_id="babe"

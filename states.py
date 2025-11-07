@@ -7,8 +7,7 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 from IPython.display import Markdown, display
-import markdown
-from markdown import Markdown
+import markdown  # Keep this for markdown.markdown() function, but don't import Markdown class
 import json
 from pydantic import parse_obj_as
 
@@ -82,7 +81,7 @@ class GlobalState(TypedDict):
     next_node_name: str  # name of the current node in the agentic system
     pdf_loc: str  # the location where the pdfs files are uploaded to, default to /workspace/mnt/pdfs/
     save_to: str  # the location to save processed study material, user states and more, default to /workspace/mnt/
-    agent_final_output: Union[str, Markdown, None]    
+    agent_final_output: Union[str, Markdown, list[str], dict, None]    
     # List of actions and corresponding observations
     # Here we annotate this with `operator.add` to indicate that operations to
     # this state should be ADDED to the existing values (not overwrite it)
