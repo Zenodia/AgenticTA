@@ -1,4 +1,4 @@
-from typing import TypedDict, Annotated, List ,  Any
+from typing import TypedDict, Annotated, List, Any, Union
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.messages import BaseMessage
 import operator
@@ -8,6 +8,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from IPython.display import Markdown, display
 import markdown
+from markdown import Markdown
 import json
 from pydantic import parse_obj_as
 
@@ -72,18 +73,20 @@ class User(TypedDict):
     curriculum: Optional[List[Curriculum]]
 
 class GlobalState(TypedDict):
-    # The input string
     input: str
-    user_id : str = Field(description="each user should have a user_id, if it is not specified, it will be randomly generated")
+    existing_user: bool 
+    user: User
+    user_id: str  # each user should have a user_id, if it is not specified, it will be randomly generated
     # The list of previous messages in the conversation
     chat_history: list[BaseMessage]
-    # The outcome of a given call to the agent
-    # Needs `None` as a valid type, since this is what this will start as
-    user: User
-    node_name: str = Field(description="name of the current node in the agentic system")    
+    next_node_name: str  # name of the current node in the agentic system
+    pdf_loc: str  # the location where the pdfs files are uploaded to, default to /workspace/mnt/pdfs/
+    save_to: str  # the location to save processed study material, user states and more, default to /workspace/mnt/
+    agent_final_output: Union[str, Markdown, None]    
     # List of actions and corresponding observations
     # Here we annotate this with `operator.add` to indicate that operations to
     # this state should be ADDED to the existing values (not overwrite it)
+    intermediate_steps: Annotated[list[Union[str, Markdown]], operator.add]
 
 
 def _to_json_safe(obj):

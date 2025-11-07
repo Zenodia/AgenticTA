@@ -32,7 +32,7 @@ services:
       # Mount source code (for development - changes reflected immediately)
       - .:/workspace
       # Mount PDF directory
-      - ../pdfs/pdfs:/workspace/mnt/pdfs
+      - /mnt/ZenoHD/astra_mnt/:/workspace/mnt/
       # Exclude Python cache from host (use container's cache)
       - /workspace/__pycache__
       - /workspace/llm/__pycache__
