@@ -3,77 +3,27 @@ import asyncio
 import aiohttp
 import json
 import requests
-from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings, NVIDIARerank
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
-from langchain_core.runnables import RunnablePassthrough
-import concurrent.futures
 from colorama import Fore
-import os,json
 import argparse
-from dotenv import load_dotenv
-from openai import OpenAI
-import os
 import base64
 from PIL import Image
 import io
 from IPython.display import Markdown, display
 import markdown
-from dotenv import load_dotenv
-load_dotenv()
-API_KEY=os.environ.get("ASTRA_TOKEN", "")
-if API_KEY:
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {API_KEY}',
-    }
-else:
-    headers = None
 
-llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
+# Import new LLM module and error handling
+from llm import LLMClient
+from errors import RAGConnectionError, LLMAPIError
+from logging_config import get_logger
+
+# Initialize logger
+logger = get_logger(__name__)
+
+# Initialize LLM client (replaces legacy astra_llm_call)
+llm_client = LLMClient()
 
 def printmd(markdown_str):
     display(Markdown(markdown_str))
-
-
-def astra_llm_call(query):
-    if not headers:
-        # Fall back to LangChain LLM if ASTRA is not configured
-        from langchain_core.output_parsers import StrOutputParser
-        from langchain_core.prompts import ChatPromptTemplate
-        prompt = ChatPromptTemplate.from_messages([("user", "{query}")])
-        chain = prompt | llm | StrOutputParser()
-        try:
-            output_str = chain.invoke({"query": query})
-        except Exception as e:
-            from colorama import Fore
-            print(Fore.RED + f"LLM fallback error: {e}" + Fore.RESET)
-            output_str = None
-        return output_str
-    
-    json_data = {
-        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
-        'messages': [
-            {
-                'role': 'user',
-                'content': query,
-            },
-        ],
-        'max_tokens': 512,
-        'stream': False,
-    }
-
-    response = requests.post(
-        'https://datarobot.prd.astra.nvidia.com/api/v2/deployments/688e407ed8a8e0543e6d9b80/chat/completions',
-        headers=headers,
-        json=json_data,
-    )
-    try :
-        output=response.json()
-        output_str = output["choices"][0]["message"]["content"]
-    except:
-            output_str=None
-    return output_str
 
 
 
@@ -86,24 +36,31 @@ async def print_response(response):
     try:
         response_json = await response.json()
         output = json.dumps(response_json, indent=2)
-        print(json.dumps(response_json, indent=2))
-    except aiohttp.ClientResponseError:
-        print(await response.text())
-        output="error"
-    return output
+        logger.debug(f"RAG response: {json.dumps(response_json, indent=2)}")
+        return output
+    except (aiohttp.ClientResponseError, json.JSONDecodeError) as e:
+        error_text = await response.text()
+        logger.error(f"Failed to parse RAG response: {e}", exc_info=True)
+        logger.debug(f"Response text: {error_text}")
+        raise RAGConnectionError(f"Invalid response from RAG server: {e}")
 
 
 
 ## helpful function to quickly get documents
 async def document_seach(payload, url):
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.post(url=url, json=payload) as response:
+    """Search documents using RAG server."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url=url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                response.raise_for_status()
                 output = await print_response(response)
-        except aiohttp.ClientError as e:
-            print(f"Error: {e}")
-            output="error"
-    return output
+                return output
+    except aiohttp.ClientError as e:
+        logger.error(f"RAG server connection error: {e}", exc_info=True)
+        raise RAGConnectionError(f"Cannot connect to RAG server at {url}", server_url=url)
+    except asyncio.TimeoutError:
+        logger.error(f"RAG server timeout for URL: {url}")
+        raise RAGConnectionError(f"RAG server timeout", server_url=url)
 # possible filter expression
 #"filter_expr": '(content_metadata["manufacturer"] like "%ford%" and content_metadata["rating"] > 4.0 and content_metadata["created_date"] between "2020-01-01" and "2024-12-31" and content_metadata["is_public"] == true) or (content_metadata["model"] like "%edge%" and content_metadata["year"] >= 2020 and content_metadata["tags"] in ["technology", "safety", "latest"] and content_metadata["rating"] >= 4.0)'
 async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : int = 5):
