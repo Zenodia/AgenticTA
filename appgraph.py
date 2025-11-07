@@ -34,23 +34,25 @@ class GlobalState(TypedDict):
 """
 
 def check_user(data):
-    inputs = data.copy()
-    user_id=inputs["user_id"]    
+    print(Fore.BLUE + "Node = **check_user** > data : ", data ,Fore.RESET)
+    user_id=data["user_id"]   
+    save_to=data["save_to"] 
     init_user_storage(save_to, user_id)
-    
-    
-    user_exist_flag = user_exists(user_id=user_id)
+    user_exist_flag=user_exists(user_id)
+    print(Fore.BLUE + " user_exist > ", user_exist_flag )
     data["existing_user"]=user_exist_flag
+    
     ## if it is existing user, then load the existing user states and restore from disk
     ## if it is new user then create new curriculum 
-    print(Fore.BLUE + "Node = **check_user** > data : ", data ,Fore.RESET)
+    
+    
     if not data["intermediate_steps"] :
         data["intermediate_steps"] =[]
     if user_exist_flag:        
         data["next_node_name"]="query_routing"
         # Load existing user state
         user_state = load_user_state(user_id)
-    
+        data["user"]=user_state
     else:        
         data["intermediate_steps"].append("first_time_user_setup")
         data["next_node_name"]= "query_routing"
@@ -94,7 +96,7 @@ def query_routing(data):
         data["intermediate_steps"].append("chitchat")
         next_node="continue"
     elif "first_time_user_setup" in output:
-        data["intermediate_steps"].append("first time user")
+        data["intermediate_steps"].append("first time user")        
         next_node="end"
     else:
         next_node ="end"
@@ -119,8 +121,10 @@ def execute_tools(data):
     print(Fore.MAGENTA + "Node = **execute_tool** > executing tool : ", tool )
     print("Node = **execute_tool** > data : ", data , Fore.RESET)
     if "study_session" in tool :
-        
-        data["agent_final_output"]="this is study session"
+        c=user_state["curriculum"][0]
+        active_chapter=c["active_chapter"]        
+        response = f"Let's start by studying \n chapter {str(active_chapter.number)}:{active_chapter.name} >>> \n 1st study-topic {active_chapter.sub_topics[0].sub_topic} >>> \n study material - \n {active_chapter.sub_topics[0].study_material}"
+        data["agent_final_output"]=response
     elif "next_chapter" in tool :
         
         data["agent_final_output"]="move to next chapter"
@@ -137,7 +141,25 @@ def execute_tools(data):
         
         data["agent_final_output"]="hey what's up?"       
     elif "first_time_user_setup" in tool:
-        data["agent_final_output"]="you are all set to go !"
+        user_id=data["user_id"]
+        preference=data["study_buddy_preference"]
+        study_buddy_name=data["study_buddy_name"]
+        u: User = {
+        "user_id": user_id,
+        "study_buddy_preference": preference,
+        "study_buddy_name": study_buddy_name,
+        "study_buddy_persona": None,
+        "curriculum": None,
+        }
+        
+        print(". . . . . . . . . ."*25)
+        print("[FIRST_TIME_USER] : populating curriculum for first time user")
+        pdf_loc=data["pdf_loc"]
+        save_to=data["save_to"]
+        # Run for first time user - returns GlobalState
+        global_state = asyncio.run(run_for_first_time_user(u, pdf_loc, save_to, preference))
+        active_chapter=global_state["user"]["curriculum"][0]["active_chapter"]
+        data["agent_final_output"]=f"Let's start with chapter :{str(active_chapter.number)}:{active_chapter.name}"
     else:
         data["agent_final_output"]="completed"
     data["next_node_name"]="end"
@@ -187,25 +209,27 @@ app = workflow.compile()
 
 
 inputs={
-    "user_id": "babe", 
-    "existing_user": False, 
+    "user_id": "babe",     
     "input": "make a curriculum for me", 
     "pdf_loc": "/workspace/mnt/pdfs", 
     "save_to": "workspace/mnt/",
     "chat_history": [],
     "next_node_name": "",
     "agent_final_output": None,
-    "intermediate_steps": []
+    "intermediate_steps": ["study_session"]
 }
 #ipython kernel install --user --name=my-conda-env-kernel   # configure Jupyter to use Python kernel
-#out=app.invoke(inputs)
-#print(out["intermediate_steps"])
-#print("--"*10)
-#print(out["agent_final_output"])
+out=app.invoke(inputs)
+
+print(out["intermediate_steps"])
+print("--"*10)
+print(out["agent_final_output"])
+"""
 save_to="/workspace/mnt/"
 user_id="babe"
 init_user_storage(save_to, user_id)
-    
+user_exist_flag=user_exists(user_id)
+print(Fore.BLUE + " user_exist > ", user_exist_flag )    
 # Load existing user state
 user_state = load_user_state(user_id)
 print("----"*10)
@@ -213,4 +237,10 @@ print(type(user_state), user_state.keys())
 print(type(user_state["curriculum"][0]), user_state["curriculum"][0].keys())
 c=user_state["curriculum"][0]
 print(type(c["active_chapter"]), type(c["study_plan"]), type(c["status"]))
-print("## \n")
+print(" ----> currently active_chapter is = \n ----------------")
+active_chapter=c["active_chapter"]
+print(f"active_chapter = {active_chapter.number}:{active_chapter.name}")
+print("\n SubTopics", '\n'.join([f"{subtopic.number}:{subtopic.sub_topic}" for subtopic in active_chapter.sub_topics]))
+print( "\n\n")
+print(f"1st study-topic {active_chapter.sub_topics[0].sub_topic} study material - \n", active_chapter.sub_topics[0].study_material)
+print("## \n")"""

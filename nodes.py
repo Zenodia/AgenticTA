@@ -831,7 +831,7 @@ async def populate_states_for_user(user: User, pdf_files_loc: str, study_buddy_p
         "user": user_dict,
         "user_id": user["user_id"],
         "chat_history": [],
-        "next_node_name": "orchestrator_start",
+        "next_node_name": "",
         "pdf_loc": pdf_files_loc,
         "save_to": "",  # Will be set by run_for_first_time_user
         "agent_final_output": None,

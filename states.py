@@ -74,7 +74,7 @@ class User(TypedDict):
 
 class GlobalState(TypedDict):
     input: str
-    existing_user: bool 
+    existing_user: Optional[bool]
     user: User
     user_id: str  # each user should have a user_id, if it is not specified, it will be randomly generated
     # The list of previous messages in the conversation
