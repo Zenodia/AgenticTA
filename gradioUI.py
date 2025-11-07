@@ -5,6 +5,7 @@ from colorama import Fore
 import os 
 import shutil
 import time
+from pathlib import Path
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status
 from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe
@@ -44,12 +45,41 @@ SAMPLE_QUIZ_DATA = {
     ]
 }
 
+def cleanup_old_user_directories(mnt_dir="/workspace/mnt/", days=7):
+    """Remove user directories older than specified days to prevent disk space issues."""
+    try:
+        cutoff_time = time.time() - (days * 86400)
+        mnt_path = Path(mnt_dir)
+        
+        if not mnt_path.exists():
+            return
+            
+        deleted_count = 0
+        for user_dir in mnt_path.glob("user_*"):
+            if user_dir.is_dir() and user_dir.stat().st_mtime < cutoff_time:
+                try:
+                    shutil.rmtree(user_dir)
+                    deleted_count += 1
+                    print(f"Cleaned up old user directory: {user_dir.name}")
+                except Exception as e:
+                    print(f"Failed to delete {user_dir}: {e}")
+        
+        if deleted_count > 0:
+            print(f"Cleaned up {deleted_count} old user directories")
+    except Exception as e:
+        print(f"Error during user directory cleanup: {e}")
+
+
 def generate_curriculum(file_obj, progress=gr.Progress()):
     """Generate curriculum from uploaded PDF or use sample data"""
     print(Fore.CYAN + "file_objs = \n", type(file_obj), file_obj)
 
     if file_obj:
         try:
+            progress(0.02, desc="Cleaning up old user directories...")
+            # Clean up old user directories (older than 7 days)
+            cleanup_old_user_directories()
+            
             progress(0.05, desc="Cleaning up old files...")
             # Clear the PDF directory to ensure fresh generation
             pdf_dir = "/workspace/mnt/pdfs/"
@@ -307,7 +337,7 @@ with gr.Blocks(title="Study Assistant") as demo:
             
             # Chat section
             gr.Markdown("## Study Buddy Chat")
-            chatbot = gr.Chatbot(height=300)
+            chatbot = gr.Chatbot(height=300, type='messages')
             with gr.Row():
                 msg = gr.Textbox(
                     label="Message",

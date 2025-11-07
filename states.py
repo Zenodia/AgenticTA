@@ -91,8 +91,11 @@ class GlobalState(TypedDict):
 
 def _to_json_safe(obj):
     """Recursively convert Pydantic models, Enums and other non-JSON types to JSON-serializable forms."""
-    # Pydantic BaseModel
-    if hasattr(obj, "dict") and callable(getattr(obj, "dict")):
+    # Pydantic BaseModel (V2 compatible)
+    if hasattr(obj, "model_dump"):
+        return _to_json_safe(obj.model_dump())
+    elif hasattr(obj, "dict") and callable(getattr(obj, "dict")):
+        # Fallback for Pydantic V1
         return _to_json_safe(obj.dict())
     # Enums
     if isinstance(obj, Enum):

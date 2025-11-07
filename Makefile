@@ -1,4 +1,4 @@
-.PHONY: help up down restart build gradio test clean status logs shell
+.PHONY: help up down restart build gradio test test-cov test-llm clean status logs shell
 
 # Default target
 help:
@@ -12,7 +12,14 @@ help:
 	@echo "  make build       - Build ta_master image only"
 	@echo "  make rebuild     - Rebuild ALL images and restart"
 	@echo "  make gradio      - Start Gradio UI"
-	@echo "  make test        - Test LLM module"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test        - Run UNIT tests only (fast, ~5s)"
+	@echo "  make test-all    - Run ALL tests including integration (~17s)"
+	@echo "  make test-cov    - Run tests with coverage report"
+	@echo "  make test-llm    - Quick LLM module check"
+	@echo ""
+	@echo "Monitoring:"
 	@echo "  make status      - Show service status"
 	@echo "  make logs        - View container logs"
 	@echo "  make shell       - Enter container shell"
@@ -80,8 +87,24 @@ restart-gradio: stop-gradio
 	@sleep 1
 	@make gradio
 
-# Test LLM module
+# Run test suite
 test:
+	@echo "Running unit tests (fast)..."
+	@echo "Tip: Use 'make test-all' to include integration tests"
+	@docker compose exec agenticta pytest -v -m "not integration and not slow"
+
+test-all:
+	@echo "Running ALL tests (unit + integration + slow)..."
+	@docker compose exec agenticta pytest -v
+
+# Run tests with coverage
+test-cov:
+	@echo "Running tests with coverage..."
+	@docker compose exec agenticta pytest --cov=. --cov-report=term-missing --cov-report=html
+	@echo "✅ Coverage report generated: htmlcov/index.html"
+
+# Quick LLM module check
+test-llm:
 	@echo "Testing LLM module..."
 	@docker compose exec agenticta python -c "from llm import LLMClient; from llm.config import load_config; print('✅ LLM module OK'); c=load_config(); print(f'✅ Config: {len(c[\"providers\"])} providers, {len(c[\"use_cases\"])} use cases')"
 

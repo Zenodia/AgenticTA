@@ -14,52 +14,18 @@ import argparse
 from openai import OpenAI
 from llm import LLMClient  # This automatically loads dotenv
 
-# Initialize the new LLM client
+# Initialize the new LLM client (automatically loads dotenv)
 llm_client = LLMClient()
+
 import base64
 from PIL import Image
 import io
 from IPython.display import Markdown, display
 import markdown
 from search_and_filter_documents import filter_documents_by_file_name
-from dotenv import load_dotenv
-load_dotenv()
-
-API_KEY=os.environ.get("ASTRA_TOKEN", "")
-headers = {
-    'Content-Type': 'application/json',
-    'Authorization': f'Bearer {API_KEY}',
-}
-
-llm= ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
 
 def printmd(markdown_str):
     display(Markdown(markdown_str))
-
-def astra_llm_call(query):
-    json_data = {
-        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
-        'messages': [
-            {
-                'role': 'user',
-                'content': query,
-            },
-        ],
-        'max_tokens': 32768,
-        'stream': False,
-    }
-
-    response = requests.post(
-        'https://datarobot.prd.astra.nvidia.com/api/v2/deployments/688e407ed8a8e0543e6d9b80/chat/completions',
-        headers=headers,
-        json=json_data,
-    )
-    try :
-        output=response.json()
-        output_str = output["choices"][0]["message"]["content"]
-    except:
-            output_str=None
-    return output_str
 
 
 def strip_thinking_tag(response):
@@ -146,7 +112,6 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
         print(Fore.BLUE + "stripped thinking tag output=\n", output, Fore.RESET) 
         print("---"*10)
         
-        #output = llm.invoke(study_material_generation_prompt_formatted).content
         return output, ""
 if __name__ == "__main__":
     # Move top-level async calls into an async main to avoid 'await outside function'
