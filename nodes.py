@@ -193,7 +193,7 @@ def user_exists(user_id: str) -> bool:
     return user_id in store.get("users", {})
 
 
-def create_user_minimal(user: User) -> dict:
+def create_user_minimal(user: User) -> User:
     # Accept either a mapping-like User or a Pydantic/Typed object
     if isinstance(user, dict):
         uid = user.get("user_id")
@@ -225,40 +225,160 @@ def create_user_minimal(user: User) -> dict:
     return minimal
 
 
-def save_user_state(user_id: str, user_obj: dict):
+def save_user_state(user_id: str, user_obj: User):
+    """Save user state to disk with proper serialization of Pydantic models.
+    
+    This function mirrors save_user_to_file from states.py by:
+    - Converting Pydantic BaseModel instances (Chapter, SubTopic, StudyPlan) to JSON-safe dicts
+    - Converting Status Enum values to their string representations
+    - Preserving the structure for later reconstruction
+    
+    Args:
+        user_id: The user identifier
+        user_obj: User TypedDict that may contain Pydantic models (Chapter, StudyPlan, etc.)
+    
+    Storage locations:
+        - Per-user file: {USER_STORE_DIR}/{user_id}.json (primary storage)
+        - Central store: {STORE_PATH} (convenience index)
+    """
     # Persist per-user JSON using states.save_user_to_file for Pydantic-aware serialization
-    save_user_to_file(user_obj, str(USER_STORE_DIR / f"{user_id}.json"))
+    user_file_path = str(USER_STORE_DIR / f"{user_id}.json")
+    save_user_to_file(user_obj, user_file_path)
+    print(f"Saved user state to {user_file_path}")
+    
     # Keep central store in sync as a convenience index
+    # Convert to JSON-safe format for central storage
     store = _load_store()
     users = store.setdefault("users", {})
-    # central store must contain only JSON-serializable data
     users[user_id] = convert_to_json_safe(user_obj)
     _save_store(store)
+    print(f"Updated central store index for user {user_id}")
 
 
-def load_user_state(user_id: str) -> dict:
+def load_user_state(user_id: str) -> User:
+    """Load user state from disk and reconstruct Python classes.
+    
+    This function mirrors load_user_from_file from states.py by:
+    - Loading JSON data from disk
+    - Reconstructing SubTopic as BaseModel with Status enum
+    - Reconstructing Chapter as BaseModel with Status enum and SubTopic list
+    - Reconstructing StudyPlan as BaseModel containing Chapter list
+    - Reconstructing Curriculum as TypedDict containing properly typed objects
+    - Reconstructing User with curriculum as List[Curriculum]
+    
+    Args:
+        user_id: The user identifier
+        
+    Returns:
+        User TypedDict with properly reconstructed Pydantic models and Enums
+        
+    Raises:
+        json.JSONDecodeError: If the user state file is corrupted
+        
+    Note:
+        If the per-user file doesn't exist, falls back to central store.
+        The fallback also properly reconstructs objects using load_user_from_file
+        to ensure type consistency.
+    """
     user_file = USER_STORE_DIR / f"{user_id}.json"
+    
+    # Primary path: Load from per-user file with proper reconstruction
     if user_file.exists():
         try:
-            return load_user_from_file(str(user_file))
+            print(f"Loading user state from {user_file}")
+            user_state = load_user_from_file(str(user_file))
+            print(f"Successfully loaded and reconstructed user state for {user_id}")
+            _verify_reconstruction(user_state, user_id)
+            return user_state
         except json.JSONDecodeError as e:
-            print(f"Error loading user state from {user_file}: {e}")
-            print(f"The file may be corrupted. Consider deleting it and recreating the user.")
+            print(f"ERROR: JSON decode error loading user state from {user_file}: {e}")
+            print(f"The file may be corrupted. Consider deleting the user directory:")
+            print(f"  rm -rf {USER_STORE_DIR.parent}")
+            print(f"Then re-run initialization for user '{user_id}'")
             raise
-    # fallback to central store
-    return _load_store().get("users", {}).get(user_id)
+        except Exception as e:
+            print(f"ERROR: Unexpected error loading user state: {e}")
+            raise
+    
+    # Fallback path: Load from central store and reconstruct
+    print(f"Per-user file not found for {user_id}, checking central store...")
+    central_data = _load_store().get("users", {}).get(user_id)
+    
+    if central_data:
+        # Save to per-user file for next time, then reload with proper reconstruction
+        print(f"Found user {user_id} in central store, migrating to per-user file...")
+        temp_file = USER_STORE_DIR / f"{user_id}_temp.json"
+        save_user_to_file(central_data, str(temp_file))
+        
+        # Now load back with proper reconstruction
+        reconstructed = load_user_from_file(str(temp_file))
+        
+        # Replace temp file with permanent file
+        temp_file.replace(user_file)
+        print(f"Migrated and reconstructed user state for {user_id}")
+        _verify_reconstruction(reconstructed, user_id)
+        return reconstructed
+    
+    print(f"WARNING: User {user_id} not found in any storage location")
+    return None
 
 
-async def update_and_save_user_state(user_id: str, save_to: str, update_fn: typing.Callable[[dict], dict]) -> dict:
+def _verify_reconstruction(user_state: User, user_id: str):
+    """Verify that loaded user state has properly reconstructed Python classes.
+    
+    This is a helper function to ensure that:
+    - StudyPlan is a BaseModel instance (not a dict)
+    - Chapter objects are BaseModel instances (not dicts)
+    - SubTopic objects are BaseModel instances (not dicts)
+    - Status values are Enum instances (not strings)
+    """
+    if not user_state:
+        return
+    
+    try:
+        curriculum_list = user_state.get("curriculum")
+        if curriculum_list and isinstance(curriculum_list, list) and len(curriculum_list) > 0:
+            curr = curriculum_list[0]
+            
+            # Verify StudyPlan reconstruction
+            study_plan = curr.get("study_plan")
+            if study_plan:
+                from states import StudyPlan, Chapter, SubTopic
+                is_study_plan = isinstance(study_plan, StudyPlan)
+                print(f"  ✓ StudyPlan reconstructed: {is_study_plan} (type: {type(study_plan).__name__})")
+                
+                # Verify Chapter reconstruction
+                if hasattr(study_plan, 'study_plan') and study_plan.study_plan:
+                    first_chapter = study_plan.study_plan[0]
+                    is_chapter = isinstance(first_chapter, Chapter)
+                    print(f"  ✓ Chapter reconstructed: {is_chapter} (type: {type(first_chapter).__name__})")
+                    
+                    # Verify SubTopic reconstruction
+                    if hasattr(first_chapter, 'sub_topics') and first_chapter.sub_topics:
+                        first_subtopic = first_chapter.sub_topics[0]
+                        is_subtopic = isinstance(first_subtopic, SubTopic)
+                        print(f"  ✓ SubTopic reconstructed: {is_subtopic} (type: {type(first_subtopic).__name__})")
+            
+            # Verify active_chapter reconstruction
+            active_ch = curr.get("active_chapter")
+            if active_ch:
+                is_active_chapter = isinstance(active_ch, Chapter)
+                print(f"  ✓ Active Chapter reconstructed: {is_active_chapter}")
+                
+    except Exception as e:
+        print(f"  Note: Verification check encountered: {e}")
+
+
+async def update_and_save_user_state(user_id: str, save_to: str, update_fn: typing.Callable[[User], User]) -> User:
     """Load user state, apply updates via callback, and save back to disk.
     
     Args:
         user_id: The user identifier
         save_to: Base directory where user data is stored
-        update_fn: A callback function (can be sync or async) that takes the loaded user dict and returns the updated user dict
+        update_fn: A callback function (can be sync or async) that takes the loaded User and returns the updated User
         
     Returns:
-        The updated user state dict
+        The updated User state
         
     Example:
         async def my_updates(user_state):
@@ -307,7 +427,7 @@ async def update_and_save_user_state(user_id: str, save_to: str, update_fn: typi
     return updated_state
 
 
-async def move_to_next_chapter(user_id: str, save_to: str) -> dict:
+async def move_to_next_chapter(user_id: str, save_to: str) -> User:
     """Convenience function to move user to the next chapter in their curriculum.
     
     Args:
@@ -315,14 +435,14 @@ async def move_to_next_chapter(user_id: str, save_to: str) -> dict:
         save_to: Base directory where user data is stored
         
     Returns:
-        The updated user state dict
+        The updated User state
         
     This function:
     - Marks current active chapter as COMPLETED
     - Moves to next chapter (sets it as active with status STARTED)
     - Updates the study plan accordingly
     """
-    async def _move_to_next(user_state: dict) -> dict:
+    async def _move_to_next(user_state: User) -> User:
         curriculum_list = user_state.get("curriculum")
         
         # curriculum is stored as List[Curriculum] per User TypedDict definition
@@ -349,7 +469,7 @@ async def move_to_next_chapter(user_id: str, save_to: str) -> dict:
 
 
 async def update_subtopic_status(user_id: str, save_to: str, subtopic_number: int, 
-                           new_status: Status, feedback: typing.Optional[typing.List[str]] = None) -> dict:
+                           new_status: Status, feedback: typing.Optional[typing.List[str]] = None) -> User:
     """Update a subtopic's status and optionally add feedback in the active chapter.
     
     Args:
@@ -360,9 +480,9 @@ async def update_subtopic_status(user_id: str, save_to: str, subtopic_number: in
         feedback: Optional list of feedback strings to add
         
     Returns:
-        The updated user state dict
+        The updated User state
     """
-    def _update_subtopic(user_state: dict) -> dict:
+    def _update_subtopic(user_state: User) -> User:
         curriculum_list = user_state.get("curriculum")
         
         # curriculum is stored as List[Curriculum] per User TypedDict definition
@@ -409,7 +529,7 @@ async def update_subtopic_status(user_id: str, save_to: str, subtopic_number: in
     return await update_and_save_user_state(user_id, save_to, _update_subtopic)
 
 
-async def add_quiz_to_subtopic(user_id: str, save_to: str, subtopic_number: int, quiz: dict) -> dict:
+async def add_quiz_to_subtopic(user_id: str, save_to: str, subtopic_number: int, quiz: dict) -> User:
     """Add a quiz to a specific subtopic in the active chapter.
     
     Args:
@@ -419,9 +539,9 @@ async def add_quiz_to_subtopic(user_id: str, save_to: str, subtopic_number: int,
         quiz: Quiz dictionary with keys: question, choices, answer, explanation
         
     Returns:
-        The updated user state dict
+        The updated User state
     """
-    def _add_quiz(user_state: dict) -> dict:
+    def _add_quiz(user_state: User) -> User:
         curriculum_list = user_state.get("curriculum")
         
         # curriculum is stored as List[Curriculum] per User TypedDict definition
@@ -647,9 +767,17 @@ async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
         print(Fore.LIGHTGREEN_EX + " how many chapters = \n", len(chapters), chapters, Fore.RESET)
     return chapters
 
-async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_preference: str) -> dict:
+async def populate_states_for_user(user: User, pdf_files_loc: str, study_buddy_preference: str) -> GlobalState:
     """Given results from MCP clients, construct Chapter, StudyPlan, Curriculum, User and GlobalState
-    and persist them in the store. Returns the GlobalState as dict.
+    and persist them in the store.
+    
+    Args:
+        user: User TypedDict with basic user information
+        pdf_files_loc: Path to directory containing PDF files
+        study_buddy_preference: User's preference for study buddy persona
+        
+    Returns:
+        GlobalState TypedDict with populated user, curriculum, and study plan
     """
     chapters = await build_chapters(pdf_files_loc)
     print(Fore.LIGHTGREEN_EX + "len of chapter is = \n",len(chapters), chapters, '\n\n', Fore.RESET )
@@ -696,13 +824,18 @@ async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_pr
     # Save into store
     save_user_state(user["user_id"], user_dict)
 
-    # Build GlobalState-like dict
-    gstate = {
+    # Build GlobalState TypedDict with all required fields
+    gstate: GlobalState = {
         "input": "initializing",
+        "existing_user": False,  # This is a first-time user
+        "user": user_dict,
         "user_id": user["user_id"],
         "chat_history": [],
-        "user": user_dict,
-        "node_name": "orchestrator_start",
+        "next_node_name": "orchestrator_start",
+        "pdf_loc": pdf_files_loc,
+        "save_to": "",  # Will be set by run_for_first_time_user
+        "agent_final_output": None,
+        "intermediate_steps": [],
     }
     # persist top-level
     store = _load_store()
@@ -712,12 +845,21 @@ async def populate_states_for_user(user:User, pdf_files_loc: str, study_buddy_pr
     return gstate
 
 
-async def run_for_first_time_user(user: User, uploaded_pdf_loc: str, save_to:str, study_buddy_preference: str) -> dict:
+async def run_for_first_time_user(user: User, uploaded_pdf_loc: str, save_to: str, study_buddy_preference: str) -> GlobalState:
     """Main entrypoint: ensure user exists, call helper clients if necessary,
-    populate states, and return the GlobalState dict.
+    populate states, and return the GlobalState.
     
     This function initializes per-user storage paths based on save_to and user_id,
     creating a directory structure for storing GlobalState and user data.
+    
+    Args:
+        user: User TypedDict with basic user information
+        uploaded_pdf_loc: Path to directory containing uploaded PDF files
+        save_to: Base directory for storing user data and states
+        study_buddy_preference: User's preference for study buddy persona
+        
+    Returns:
+        GlobalState TypedDict with fully populated user state and curriculum
     """
     user_id = user["user_id"]
     
@@ -738,10 +880,17 @@ async def run_for_first_time_user(user: User, uploaded_pdf_loc: str, save_to:str
         return store["global_states"][user_id]
 
     # First-time population: call helper clients
-    
-
     print("Populating application states ...")
     gstate = await populate_states_for_user(user, uploaded_pdf_loc, study_buddy_preference)
+    
+    # Update GlobalState with save_to path
+    gstate["save_to"] = save_to
+    
+    # Re-save the updated GlobalState
+    store = _load_store()
+    store.setdefault("global_states", {})[user_id] = gstate
+    _save_store(store)
+    
     print("Done. GlobalState created and saved.")
     return gstate
 
@@ -756,19 +905,27 @@ if __name__ == "__main__":
     parser.add_argument("pdf_loc", nargs="?", default="/workspace/mnt/pdfs/")
     parser.add_argument("save_to", nargs="?", default="/workspace/mnt/")
     args = parser.parse_args()
-    u=User(
-    user_id=args.user_id,
-    study_buddy_preference=args.preference, 
-    study_buddy_name=args.study_buddy_name, 
-    study_buddy_persona=None,
-    )
-    uploaded_pdf_loc=args.pdf_loc
-    save_to=args.save_to
+    
+    # Create User TypedDict
+    u: User = {
+        "user_id": args.user_id,
+        "study_buddy_preference": args.preference,
+        "study_buddy_name": args.study_buddy_name,
+        "study_buddy_persona": None,
+        "curriculum": None,
+    }
+    
+    uploaded_pdf_loc = args.pdf_loc
+    save_to = args.save_to
+    
     print(". . . . . . . . . ."*25)
-    print("[FIST_TIME_USER] : populating curriculum for first time user")
-    g = asyncio.run(run_for_first_time_user(u,uploaded_pdf_loc,save_to, args.preference))
-    # print a JSON-serializable representation of the user
-    print(json.dumps(convert_to_json_safe(u), indent=2, ensure_ascii=False))
+    print("[FIRST_TIME_USER] : populating curriculum for first time user")
+    
+    # Run for first time user - returns GlobalState
+    global_state: GlobalState = asyncio.run(run_for_first_time_user(u, uploaded_pdf_loc, save_to, args.preference))
+    
+    # Print a JSON-serializable representation of the global state
+    print(json.dumps(convert_to_json_safe(global_state), indent=2, ensure_ascii=False))
     
     # Example: Demonstrate updating user state
     print("\n" + "="*60)
@@ -779,20 +936,19 @@ if __name__ == "__main__":
     print(". . . . . . . . . ."*25)
     print("\n1. [RETURN USER] : Updating subtopic status with feedback...")
     try:
-        updated = asyncio.run(update_subtopic_status(
+        updated_user: User = asyncio.run(update_subtopic_status(
             user_id=args.user_id,
             save_to=save_to,
             subtopic_number=0,
             new_status=Status.COMPLETED,
             feedback=["Excellent work!", "All concepts mastered"]
         ))
-        print("   Success!")
+        print(f"   ✓ Success! Updated user: {updated_user['user_id']}")
     except Exception as e:
         print(f"   (Skipped - user state may not exist yet: {e})")
     
     # Example 2: Add a quiz to a subtopic
-    
-    print("\n2. Adding quiz to subtopic...")
+    print("\n2. [RETURN USER] : Adding quiz to subtopic...")
     try:
         quiz = {
             "question": "What is the main topic discussed?",
@@ -800,34 +956,40 @@ if __name__ == "__main__":
             "answer": "Option A",
             "explanation": "This is the correct answer because..."
         }
-        updated = asyncio.run(add_quiz_to_subtopic(
+        updated_user: User = asyncio.run(add_quiz_to_subtopic(
             user_id=args.user_id,
             save_to=save_to,
             subtopic_number=0,
             quiz=quiz
         ))
-        print("   Success!")
+        print(f"   ✓ Success! Updated user: {updated_user['user_id']}")
     except Exception as e:
         print(f"   (Skipped - user state may not exist yet: {e})")
     
     # Example 3: Move to next chapter
-    print("\n3. [RETURN USER] : Moving to next chapter ...")
-    
+    print("\n3. [RETURN USER] : Moving to next chapter...")
     try:
-        updated = asyncio.run(move_to_next_chapter(
+        updated_user: User = asyncio.run(move_to_next_chapter(
             user_id=args.user_id,
             save_to=save_to
         ))
-        print("   Success!")
+        print(f"   ✓ Success! Updated user: {updated_user['user_id']}")
+        
+        # Verify the update worked
+        if updated_user["curriculum"] and len(updated_user["curriculum"]) > 0:
+            curr = updated_user["curriculum"][0]
+            active_ch = curr.get("active_chapter")
+            if active_ch and isinstance(active_ch, Chapter):
+                print(f"   ✓ Now on chapter: {active_ch.name} (status: {active_ch.status})")
     except Exception as e:
         print(f"   (Skipped - user state may not exist yet: {e})")
     
     # Example 4: Custom update using update_and_save_user_state
     """
-    print("\n4. Custom update using callback function...")
+    print("\n4. [RETURN USER] : Custom update using callback function...")
     try:
-        def custom_update(user_state):
-            #### Custom update logic
+        def custom_update(user_state: User) -> User:
+            '''Custom update logic with proper User type annotations'''
             curriculum_list = user_state.get("curriculum")
             if curriculum_list and len(curriculum_list) > 0:
                 curr = curriculum_list[0]
@@ -840,15 +1002,15 @@ if __name__ == "__main__":
                     print("   ✓ Added custom feedback to active chapter")
             return user_state
         
-        updated = update_and_save_user_state(
+        updated_user: User = asyncio.run(update_and_save_user_state(
             user_id=args.user_id,
             save_to=save_to,
             update_fn=custom_update
-        )
-        print("   Success!")
+        ))
+        print(f"   ✓ Success! Updated user: {updated_user['user_id']}")
     except Exception as e:
         print(f"   (Skipped - user state may not exist yet: {e})")
     
     print("\n" + "="*60)
-    print("Update demonstrations complete!")
+    print("✓ Update demonstrations complete!")
     print("="*60)"""

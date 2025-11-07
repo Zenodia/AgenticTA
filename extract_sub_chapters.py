@@ -208,7 +208,7 @@ if __name__ == "__main__":
     path_to_pdf_file="/workspace/mnt/pdfs/SwedenDriving_intro.pdf"
     output = parallel_extract_pdf_page_and_text(path_to_pdf_file)
     output = post_process_extract_sub_chapters(output)
-
+    """
     i=0
     for p_text in output:
         print(f" ---------------------- extracted page number: {str(i)} ---------------------------")

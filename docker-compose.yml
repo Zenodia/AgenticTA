@@ -19,6 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: host
     image: ta_master:latest
     container_name: agenticta
     environment:
@@ -38,6 +39,7 @@ services:
       - /workspace/llm/__pycache__
     ports:
       - "7860:7860"  # Gradio UI
+      - "2345:2345"
     depends_on:
       - rag-server
       - ingestor-server
