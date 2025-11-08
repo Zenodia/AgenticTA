@@ -1,0 +1,199 @@
+"""
+Centralized secrets configuration for AgenticTA.
+Loads secrets from Vault with .env fallback.
+"""
+
+import os
+from typing import Dict, Optional
+from vault.client import get_secret_with_fallback, get_vault_client
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class SecretsConfig:
+    """Centralized secrets configuration."""
+    
+    # Secret paths in Vault
+    API_KEYS_PATH = "agenticta/api-keys"
+    AUTH_TOKENS_PATH = "agenticta/auth-tokens"
+    OBSERVABILITY_PATH = "agenticta/observability"
+    
+    def __init__(self, use_vault: bool = True):
+        """
+        Initialize secrets configuration.
+        
+        Args:
+            use_vault: Whether to use Vault (False = .env only)
+        """
+        self.use_vault = use_vault
+        self._secrets: Dict[str, Optional[str]] = {}
+        self._load_secrets()
+    
+    def _load_secrets(self):
+        """Load all secrets from Vault or environment."""
+        if self.use_vault:
+            self._load_from_vault()
+        else:
+            self._load_from_env()
+    
+    def _load_from_vault(self):
+        """Load secrets from Vault with .env fallback."""
+        logger.info("Loading secrets from Vault...")
+        
+        # API Keys
+        try:
+            self._secrets['NVIDIA_API_KEY'] = get_secret_with_fallback(
+                vault_path=self.API_KEYS_PATH,
+                vault_key='nvidia_api_key',
+                env_var='NVIDIA_API_KEY',
+                required=True
+            )
+        except ValueError as e:
+            logger.error(f"Failed to load NVIDIA_API_KEY: {e}")
+            raise
+        
+        self._secrets['HF_TOKEN'] = get_secret_with_fallback(
+            vault_path=self.API_KEYS_PATH,
+            vault_key='hf_token',
+            env_var='HF_TOKEN',
+            required=False
+        )
+        
+        # Authentication Tokens
+        self._secrets['ASTRA_TOKEN'] = get_secret_with_fallback(
+            vault_path=self.AUTH_TOKENS_PATH,
+            vault_key='astra_token',
+            env_var='ASTRA_TOKEN',
+            required=False
+        )
+        
+        # Observability
+        self._secrets['DATADOG_EMBEDDING_API_TOKEN'] = get_secret_with_fallback(
+            vault_path=self.OBSERVABILITY_PATH,
+            vault_key='datadog_embedding_api_token',
+            env_var='DATADOG_EMBEDDING_API_TOKEN',
+            required=False
+        )
+        
+        # Log loaded secrets (without values!)
+        loaded = [k for k, v in self._secrets.items() if v is not None]
+        logger.info(f"Loaded {len(loaded)} secrets: {', '.join(loaded)}")
+    
+    def _load_from_env(self):
+        """Load secrets from environment variables only."""
+        logger.info("Loading secrets from environment...")
+        
+        env_vars = [
+            'NVIDIA_API_KEY',
+            'HF_TOKEN',
+            'ASTRA_TOKEN',
+            'DATADOG_EMBEDDING_API_TOKEN'
+        ]
+        
+        for var in env_vars:
+            value = os.getenv(var)
+            if value:
+                self._secrets[var] = value
+        
+        loaded = [k for k, v in self._secrets.items() if v is not None]
+        logger.info(f"Loaded {len(loaded)} secrets from environment")
+    
+    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """
+        Get secret value.
+        
+        Args:
+            key: Secret key name
+            default: Default value if not found
+            
+        Returns:
+            Secret value or default
+        """
+        return self._secrets.get(key, default)
+    
+    def get_all(self) -> Dict[str, Optional[str]]:
+        """
+        Get all secrets as dictionary.
+        
+        Returns:
+            Dictionary of all secrets (excluding None values)
+        """
+        return {k: v for k, v in self._secrets.items() if v is not None}
+    
+    def reload(self):
+        """Reload all secrets from source."""
+        self._secrets.clear()
+        self._load_secrets()
+        logger.info("Secrets reloaded")
+    
+    def __getitem__(self, key: str) -> Optional[str]:
+        """Allow dict-like access."""
+        return self._secrets[key]
+    
+    def __contains__(self, key: str) -> bool:
+        """Allow 'in' operator."""
+        return key in self._secrets
+    
+    def __repr__(self) -> str:
+        """String representation (without secret values)."""
+        keys = list(self._secrets.keys())
+        return f"SecretsConfig(use_vault={self.use_vault}, secrets={keys})"
+
+
+# Global config instance
+_secrets_config: Optional[SecretsConfig] = None
+
+
+def get_secrets_config(use_vault: Optional[bool] = None, force_reload: bool = False) -> SecretsConfig:
+    """
+    Get or create global secrets configuration.
+    
+    Args:
+        use_vault: Override vault usage (None = auto-detect)
+        force_reload: Force reload secrets
+        
+    Returns:
+        SecretsConfig instance
+    """
+    global _secrets_config
+    
+    if _secrets_config is None or force_reload:
+        # Auto-detect: use Vault if VAULT_TOKEN is set
+        if use_vault is None:
+            use_vault = bool(os.getenv('VAULT_TOKEN'))
+            logger.info(f"Auto-detected use_vault={use_vault}")
+        
+        _secrets_config = SecretsConfig(use_vault=use_vault)
+    
+    return _secrets_config
+
+
+# Convenience functions for common secrets
+def get_nvidia_api_key() -> str:
+    """Get NVIDIA API key (required)."""
+    config = get_secrets_config()
+    key = config.get('NVIDIA_API_KEY')
+    if not key:
+        raise ValueError("NVIDIA_API_KEY not configured")
+    return key
+
+
+def get_hf_token() -> Optional[str]:
+    """Get Hugging Face token (optional)."""
+    config = get_secrets_config()
+    return config.get('HF_TOKEN')
+
+
+def get_astra_token() -> Optional[str]:
+    """Get Astra token (optional)."""
+    config = get_secrets_config()
+    return config.get('ASTRA_TOKEN')
+
+
+def get_datadog_embedding_token() -> Optional[str]:
+    """Get Datadog embedding API token (optional)."""
+    config = get_secrets_config()
+    return config.get('DATADOG_EMBEDDING_API_TOKEN')
+
+

@@ -25,6 +25,11 @@ help:
 	@echo "  make shell       - Enter container shell"
 	@echo "  make clean       - Remove all containers and volumes"
 	@echo ""
+	@echo "Vault (optional - for testing):"
+	@echo "  make vault-dev-start - Start local Vault dev server"
+	@echo "  make vault-dev-stop  - Stop local Vault"
+	@echo "  make vault-check     - Check secrets in Vault"
+	@echo ""
 	@echo "Quick Start:"
 	@echo "  1. make up        # Start everything (fast, uses existing images)"
 	@echo "  2. make gradio    # Start Gradio UI"
@@ -199,3 +204,32 @@ info:
 	@echo "  • llm_config.yaml     - LLM configuration"
 	@echo "  • requirements.txt    - Python dependencies"
 	@echo ""
+	@echo "Vault (optional dev/testing):"
+	@echo "  make vault-dev-start  - Start local Vault (then run: source .env.vault-local)"
+	@echo "  make vault-dev-stop   - Stop local Vault"
+	@echo "  make vault-check      - Check what secrets are in Vault"
+	@echo ""
+	@echo "  ⚠️  After vault-dev-start, run: source .env.vault-local"
+	@echo "  See scripts/vault/    - For production Vault setup"
+	@echo ""
+
+# ============================================================================
+# Vault Integration (Optional - for testing Vault integration locally)
+# ============================================================================
+# Note: Local Vault is for DEVELOPMENT/TESTING only, not for production!
+# Production uses NVIDIA's Vault with OIDC authentication.
+# See scripts/vault/README.md for details.
+
+.PHONY: vault-dev-start vault-dev-stop vault-check
+
+vault-dev-start:
+	@echo "Starting local Vault (development only)..."
+	@./scripts/vault/start_local_vault.sh
+
+vault-dev-stop:
+	@echo "Stopping local Vault..."
+	@./scripts/vault/stop_local_vault.sh
+
+vault-check:
+	@echo "Checking Vault secrets..."
+	@python scripts/vault/list_secrets.py
