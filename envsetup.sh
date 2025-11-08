@@ -21,17 +21,3 @@ if [ -f "$TOP/.env" ]; then
     source "$TOP/.env"
     set +a
 fi
-
-echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║          AgenticTA Environment Loaded                     ║"
-echo "╚═══════════════════════════════════════════════════════════╝"
-echo ""
-echo "  TOP: $TOP"
-echo "  RAG: $RAG"
-echo ""
-echo "Quick Start:"
-echo "  make up      # Start all services"
-echo "  make gradio  # Start Gradio UI"
-echo ""
-echo "For more commands: make help"
-echo ""
