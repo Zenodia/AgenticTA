@@ -10,12 +10,9 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import logging
 
-# Auto-load Vault configuration from .env files
-try:
-    from vault.env_loader import ensure_vault_config
-    ensure_vault_config()
-except ImportError:
-    pass  # env_loader not available yet
+# DO NOT auto-load Vault configuration - causes unexpected side effects
+# Vault configuration should be explicit via environment variables
+# If you need to load from .env files, call ensure_vault_config() manually
 
 logger = logging.getLogger(__name__)
 

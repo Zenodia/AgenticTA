@@ -1,0 +1,32 @@
+# Docker Compose override for NVIDIA Production Vault
+# Use with: docker compose -f docker-compose.yml -f docker-compose.vault-prod.yml up -d
+#
+# Prerequisites:
+# 1. Create .env.vault-prod with VAULT_TOKEN
+# 2. Ensure you're on NVIDIA network (can reach prod.internal.vault.nvidia.com)
+# 3. Secrets must already exist in Vault at: secret/agenticta/
+# 4. PRODUCTION DEPLOYMENT - Enforces VAULT_TOKEN requirement
+
+services:
+  agenticta:
+    env_file:
+      - .env.vault-prod
+    environment:
+      # NVIDIA Production Vault configuration
+      # These are automatically loaded from .env.vault-prod:
+      # - VAULT_ADDR=https://prod.internal.vault.nvidia.com
+      # - VAULT_NAMESPACE=wwfo-self-ta
+      # - VAULT_TOKEN=<your-production-token>
+      # - ENVIRONMENT=production
+      # - REQUIRE_VAULT=true
+      
+      # Vault mount point (optional override)
+      - VAULT_MOUNT_POINT=secret
+      
+      # Force vault usage (hard fail if VAULT_TOKEN not set)
+      - USE_VAULT=true
+    
+    # Production networks (add your production networks here)
+    # networks:
+    #   - production-network
+

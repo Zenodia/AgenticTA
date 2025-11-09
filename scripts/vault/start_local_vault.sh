@@ -42,7 +42,7 @@ fi
 # Start Vault container
 echo -e "${BLUE}Starting Vault container...${NC}"
 cd "$PROJECT_ROOT"
-docker-compose -f docker-compose.vault-dev.yml up -d
+docker compose -f docker-compose.vault-dev.yml up -d
 
 # Wait for Vault to be ready
 echo -e "${BLUE}Waiting for Vault to be ready...${NC}"
@@ -53,7 +53,7 @@ for i in {1..30}; do
     fi
     if [ $i -eq 30 ]; then
         echo -e "${RED}✗ Vault failed to start after 30 seconds${NC}"
-        docker-compose -f docker-compose.vault-dev.yml logs vault-dev
+        docker compose -f docker-compose.vault-dev.yml logs vault-dev
         exit 1
     fi
     echo -n "."
@@ -112,18 +112,28 @@ MIGRATION_SUCCESS=false
 if [ -f "$PROJECT_ROOT/.env" ]; then
     echo -e "${BLUE}Migrating secrets from .env to Vault...${NC}"
     
-    # Set vault config and run migration (assumes python is available in activated venv)
-    export VAULT_ADDR='http://localhost:8200'
-    export VAULT_TOKEN='dev-root-token-agenticta'
-    export VAULT_NAMESPACE=''
-    
-    if python "$SCRIPT_DIR/migrate_secrets_to_vault.py" 2>&1 | tee /tmp/vault_migration.log | grep -q "Successfully migrated all secrets"; then
-        echo -e "${GREEN}✓ Secrets migrated successfully${NC}"
-        MIGRATION_SUCCESS=true
+    # Check if agenticta container is running
+    if docker ps --filter "name=agenticta" --format "{{.Names}}" | grep -q "agenticta" 2>/dev/null; then
+        echo -e "${BLUE}Running migration from agenticta container...${NC}"
+        
+        # Run migration inside agenticta container
+        if docker compose -f "$PROJECT_ROOT/docker-compose.yml" exec -T \
+            -e VAULT_ADDR=http://vault-dev:8200 \
+            -e VAULT_TOKEN=dev-root-token-agenticta \
+            -e VAULT_NAMESPACE='' \
+            agenticta python scripts/vault/migrate_secrets_to_vault.py 2>&1 | tee /tmp/vault_migration.log | grep -q "Successfully migrated all secrets"; then
+            echo -e "${GREEN}✓ Secrets migrated successfully${NC}"
+            MIGRATION_SUCCESS=true
+        else
+            echo -e "${YELLOW}⚠ Migration failed or incomplete${NC}"
+            echo -e "   ${YELLOW}Check logs: cat /tmp/vault_migration.log${NC}"
+            echo -e "   ${YELLOW}Run manually: docker compose exec agenticta python scripts/vault/migrate_secrets_to_vault.py${NC}"
+        fi
     else
-        echo -e "${YELLOW}⚠ Migration failed or incomplete${NC}"
-        echo -e "   ${YELLOW}Check logs: cat /tmp/vault_migration.log${NC}"
-        echo -e "   ${YELLOW}Run manually: python scripts/vault/migrate_secrets_to_vault.py${NC}"
+        echo -e "${YELLOW}⚠ AgenticTA container not running - skipping auto-migration${NC}"
+        echo -e "   ${YELLOW}Start container with: make up${NC}"
+        echo -e "   ${YELLOW}Then run: docker compose exec agenticta python scripts/vault/migrate_secrets_to_vault.py${NC}"
+        MIGRATION_SUCCESS=true  # Not a failure, just skip
     fi
 else
     echo -e "${YELLOW}⚠ .env file not found, skipping migration${NC}"
@@ -198,20 +208,25 @@ if [ -t 0 ] && [ "$HEALTH_SUCCESS" = true ]; then
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo ""
-        python "$SCRIPT_DIR/vault_health_check.py"
+        if docker ps --filter "name=agenticta" --format "{{.Names}}" | grep -q "agenticta" 2>/dev/null; then
+            docker compose exec -e VAULT_ADDR=http://vault-dev:8200 -e VAULT_TOKEN=dev-root-token-agenticta agenticta python "$SCRIPT_DIR/vault_health_check.py"
+        else
+            echo -e "${YELLOW}⚠ AgenticTA container not running - start with 'make up' to run health check${NC}"
+        fi
     fi
 fi
 
-echo -e "${BLUE}To use local Vault in this terminal:${NC}"
-echo -e "  ${YELLOW}source .env.vault-local${NC}"
 echo ""
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║                  ✅ Next Steps!                            ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
-echo -e "  1. ${YELLOW}source .env.vault-local${NC}                          # Set environment"
-echo -e "  2. ${YELLOW}python scripts/vault/list_secrets.py${NC}            # Check secrets"
-echo -e "  3. ${YELLOW}python scripts/vault/test_vault_integration.py${NC}  # Test integration"
 echo ""
-echo -e "${BLUE}To stop Vault:${NC}"
-echo -e "  ${YELLOW}./scripts/vault/stop_local_vault.sh${NC}"
+echo -e "  ${BLUE}1. Check secrets:${NC}"
+echo -e "     ${YELLOW}make vault-check${NC}"
+echo ""
+echo -e "  ${BLUE}2. If secrets missing, migrate from .env:${NC}"
+echo -e "     ${YELLOW}docker compose exec agenticta python scripts/vault/migrate_secrets_to_vault.py${NC}"
+echo ""
+echo -e "  ${BLUE}3. Stop Vault when done:${NC}"
+echo -e "     ${YELLOW}make vault-dev-stop${NC}"
 echo ""

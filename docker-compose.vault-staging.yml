@@ -1,0 +1,26 @@
+# Docker Compose override for NVIDIA Staging Vault
+# Use with: docker compose -f docker-compose.yml -f docker-compose.vault-staging.yml up -d
+#
+# Prerequisites:
+# 1. Create .env.vault-staging with VAULT_TOKEN
+# 2. Ensure you're on NVIDIA network (can reach stg.internal.vault.nvidia.com)
+# 3. Secrets must already exist in Vault at: secret/agenticta/
+
+services:
+  agenticta:
+    env_file:
+      - .env.vault-staging
+    environment:
+      # NVIDIA Staging Vault configuration
+      # These are automatically loaded from .env.vault-staging:
+      # - VAULT_ADDR=https://stg.internal.vault.nvidia.com
+      # - VAULT_NAMESPACE=wwfo-self-ta
+      # - VAULT_TOKEN=<your-staging-token>
+      # - ENVIRONMENT=staging
+      
+      # Vault mount point (optional override)
+      - VAULT_MOUNT_POINT=secret
+      
+      # Force vault usage (no .env fallback in staging)
+      - USE_VAULT=true
+

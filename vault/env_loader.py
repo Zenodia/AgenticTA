@@ -69,13 +69,10 @@ def load_vault_env() -> Dict[str, str]:
     if os.getenv('VAULT_NAMESPACE') is not None:  # Can be empty string
         config['VAULT_NAMESPACE'] = os.getenv('VAULT_NAMESPACE')
     
-    # Set defaults if not found
-    if 'VAULT_ADDR' not in config:
-        config['VAULT_ADDR'] = 'https://stg.internal.vault.nvidia.com'
-    if 'VAULT_NAMESPACE' not in config:
-        config['VAULT_NAMESPACE'] = 'wwfo-self-ta'
+    # DO NOT set defaults - let Vault configuration be explicit
+    # Setting defaults causes unexpected behavior when Vault is not configured
     
-    # Ensure environment variables are set for other code
+    # Only set environment variables if they were explicitly configured
     for key, value in config.items():
         if key not in os.environ or not os.environ[key]:
             os.environ[key] = value
@@ -139,11 +136,11 @@ def _load_env_file(filepath: Path) -> Dict[str, str]:
 def ensure_vault_config():
     """
     Ensure Vault configuration is loaded.
-    Call this at module import to auto-configure.
+    Call this explicitly when needed (not automatic).
     """
     load_vault_env()
 
 
-# Auto-load on import
-ensure_vault_config()
+# DO NOT auto-load on import - causes unexpected side effects
+# Call ensure_vault_config() explicitly if needed
 

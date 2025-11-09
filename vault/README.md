@@ -127,11 +127,11 @@ See [`scripts/vault/env.template`](../scripts/vault/env.template) for a complete
 
 ## Testing
 
-Run the test suite:
+Verify vault integration:
 
 ```bash
-cd scripts/vault
-python test_vault_integration.py
+make vault-check    # Check secrets in vault
+make test           # Run automated tests
 ```
 
 ## Support

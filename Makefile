@@ -6,12 +6,13 @@ help:
 	@echo "║          AgenticTA - Development Commands                ║"
 	@echo "╚═══════════════════════════════════════════════════════════╝"
 	@echo ""
-	@echo "  make up          - Start all services (use existing images)"
-	@echo "  make down        - Stop all services"
-	@echo "  make restart     - Restart all services"
-	@echo "  make build       - Build ta_master image only"
-	@echo "  make rebuild     - Rebuild ALL images and restart"
-	@echo "  make gradio      - Start Gradio UI"
+	@echo "  make up               - Start all services (without Vault)"
+	@echo "  make up-with-vault    - Start all services WITH local vault"
+	@echo "  make down             - Stop all services"
+	@echo "  make restart          - Restart all services"
+	@echo "  make build            - Build ta_master image only"
+	@echo "  make rebuild          - Rebuild ALL images and restart"
+	@echo "  make gradio           - Start Gradio UI"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test        - Run UNIT tests only (fast, ~5s)"
@@ -25,9 +26,10 @@ help:
 	@echo "  make shell       - Enter container shell"
 	@echo "  make clean       - Remove all containers and volumes"
 	@echo ""
-	@echo "Vault (optional - for testing):"
+	@echo "Vault (optional - development only):"
 	@echo "  make vault-dev-start - Start local Vault dev server"
 	@echo "  make vault-dev-stop  - Stop local Vault"
+	@echo "  make vault-migrate   - Migrate secrets from .env to Vault"
 	@echo "  make vault-check     - Check secrets in Vault"
 	@echo ""
 	@echo "Quick Start:"
@@ -57,10 +59,33 @@ up:
 	@echo ""
 	@echo "💡 Tip: Use 'make rebuild' to rebuild images"
 
+# Start with local vault-dev (development)
+up-with-vault:
+	@echo "Starting all services WITH local vault-dev..."
+	@docker compose -f docker-compose.yml -f docker-compose.vault-local.yml up -d
+	@echo ""
+	@echo "✅ All services started (with Vault)!"
+	@echo ""
+	@echo "⏳ Waiting for Vault to be ready..."
+	@sleep 5
+	@echo ""
+	@echo "📋 Next steps:"
+	@echo "  1. Migrate secrets: make vault-migrate"
+	@echo "  2. Check secrets:   make vault-check"
+	@echo "  3. Start Gradio:    make gradio"
+	@echo ""
+	@echo "💡 Vault UI: http://localhost:8200 (token: dev-root-token-agenticta)"
+
 # Stop all services
 down:
 	@echo "Stopping all services..."
 	@docker compose down
+	@if docker ps -a --filter "name=agenticta-vault-dev" --format "{{.Names}}" | grep -q "agenticta-vault-dev" 2>/dev/null; then \
+		echo "Stopping vault-dev..."; \
+		docker stop agenticta-vault-dev 2>/dev/null || true; \
+		docker rm agenticta-vault-dev 2>/dev/null || true; \
+		docker network rm agenticta-vault-network 2>/dev/null || true; \
+	fi
 	@echo "✅ All services stopped"
 
 # Restart all services
@@ -220,7 +245,7 @@ info:
 # Production uses NVIDIA's Vault with OIDC authentication.
 # See scripts/vault/README.md for details.
 
-.PHONY: vault-dev-start vault-dev-stop vault-check
+.PHONY: vault-dev-start vault-dev-stop vault-check vault-migrate
 
 vault-dev-start:
 	@echo "Starting local Vault (development only)..."
@@ -232,4 +257,32 @@ vault-dev-stop:
 
 vault-check:
 	@echo "Checking Vault secrets..."
-	@python scripts/vault/list_secrets.py
+	@if docker ps --filter "name=agenticta" --format "{{.Names}}" | grep -q "agenticta"; then \
+		docker compose exec -e VAULT_ADDR=http://vault-dev:8200 -e VAULT_TOKEN=dev-root-token-agenticta agenticta python scripts/vault/list_secrets.py; \
+	else \
+		echo "⚠️  AgenticTA container not running. Start with: make up"; \
+		exit 1; \
+	fi
+
+vault-migrate:
+	@echo "Migrating secrets from .env to Vault..."
+	@if docker ps --filter "name=agenticta" --format "{{.Names}}" | grep -q "agenticta"; then \
+		docker compose exec -e VAULT_ADDR=http://vault-dev:8200 -e VAULT_TOKEN=dev-root-token-agenticta agenticta python scripts/vault/migrate_secrets_to_vault.py; \
+	else \
+		echo "⚠️  AgenticTA container not running. Start with: make up"; \
+		exit 1; \
+	fi
+
+# Production deployment with Vault
+.PHONY: deploy-prod
+deploy-prod:
+	@echo "Deploying with production Vault..."
+	@if [ -z "$$VAULT_TOKEN" ]; then \
+		echo "❌ VAULT_TOKEN not set. Get token with:"; \
+		echo "   ./scripts/vault/get_vault_token.sh"; \
+		echo "   Or set manually: export VAULT_TOKEN=your-token"; \
+		exit 1; \
+	fi
+	@echo "✅ VAULT_TOKEN found"
+	@docker compose -f docker-compose.yml -f docker-compose.vault-prod.yml up -d
+	@echo "✅ Deployed with production Vault"

@@ -19,7 +19,7 @@ echo -e "${BLUE}Stopping Local Vault Development Server...${NC}"
 cd "$PROJECT_ROOT"
 
 # Stop and remove container
-docker-compose -f docker-compose.vault-dev.yml down
+docker compose -f docker-compose.vault-dev.yml down
 
 echo -e "${GREEN}✓ Vault container stopped${NC}"
 echo ""

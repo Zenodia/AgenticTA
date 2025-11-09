@@ -39,6 +39,27 @@ class SecretsConfig:
     
     def _load_from_vault(self):
         """Load secrets from Vault with .env fallback."""
+        # Check if Vault is actually configured
+        vault_token = os.getenv('VAULT_TOKEN')
+        environment = os.getenv('ENVIRONMENT', 'development').lower()
+        require_vault = os.getenv('REQUIRE_VAULT', '').lower() in ('true', '1', 'yes')
+        
+        # Production safety check
+        if (environment == 'production' or require_vault) and not vault_token:
+            error_msg = (
+                "❌ PRODUCTION ERROR: VAULT_TOKEN not set!\n"
+                f"   ENVIRONMENT: {environment}\n"
+                f"   REQUIRE_VAULT: {require_vault}\n"
+                "   Production deployments MUST use Vault for security.\n"
+                "   Set VAULT_TOKEN or set ENVIRONMENT=development for local dev."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        if not vault_token:
+            logger.info("VAULT_TOKEN not set - using environment variables only (development mode)")
+            return self._load_from_env()
+        
         logger.info("Loading secrets from Vault...")
         
         # API Keys
@@ -161,8 +182,11 @@ def get_secrets_config(use_vault: Optional[bool] = None, force_reload: bool = Fa
     if _secrets_config is None or force_reload:
         # Auto-detect: use Vault if VAULT_TOKEN is set
         if use_vault is None:
-            use_vault = bool(os.getenv('VAULT_TOKEN'))
-            logger.info(f"Auto-detected use_vault={use_vault}")
+            vault_token = os.getenv('VAULT_TOKEN')
+            use_vault = bool(vault_token)
+            logger.info(f"Auto-detected use_vault={use_vault} (VAULT_TOKEN={'set' if vault_token else 'not set'})")
+        else:
+            logger.info(f"Explicit use_vault={use_vault}")
         
         _secrets_config = SecretsConfig(use_vault=use_vault)
     

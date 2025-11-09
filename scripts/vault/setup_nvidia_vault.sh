@@ -196,8 +196,8 @@ echo -e ""
 echo -e "  2. Verify secrets:"
 echo -e "     ${GREEN}make vault-check${NC}"
 echo -e ""
-echo -e "  3. Test your application:"
-echo -e "     ${GREEN}python scripts/vault/test_vault_integration.py${NC}"
+echo -e "  3. Run tests:"
+echo -e "     ${GREEN}make test${NC}"
 echo -e ""
 
 
