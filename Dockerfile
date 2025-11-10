@@ -53,4 +53,4 @@ EXPOSE 8888 9999 8000 7860 7861 60808
 
 # Keep container running
 #CMD ["sh", "-c", "tail -f /dev/null"]
-CMD ["python","chapter_gen_from_file_names.py", "--pdf_loc","/workspace/pdfs/Swedish...pdf"]
+CMD ["python","extract_sub_chapters.py","--pdf_file_loc","/workspace/test_pdfs/SwedenFacts.pdf"]
