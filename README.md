@@ -30,24 +30,28 @@ make up && sleep 30 && make gradio
 
 ## Documentation
 
-- **[QUICKSTART.md](QUICKSTART.md)** - Get up and running fast
+- **[QUICKSTART.md](QUICKSTART.md)** - Get up and running fast (all 4 modes)
 - **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Detailed setup instructions
 - **[llm/README.md](llm/README.md)** - LLM module architecture
+- **[vault/](vault/)** - Vault integration documentation
 
 ---
 
 ## Quick Commands
 
 ```bash
-make help           # View all commands
-make up             # Start all services
-make gradio         # Start Gradio UI
-make logs           # View logs
-make restart        # Restart services
-make shell          # Enter container
-make down           # Stop everything
-make clean          # Clean up all data
+make help              # View all commands
+make up                # Start all services (uses .env)
+make up-with-vault     # Start with Vault (dev mode)
+make gradio            # Start Gradio UI
+make logs              # View logs
+make restart           # Restart services
+make shell             # Enter container
+make down              # Stop everything
+make clean             # Clean up all data
 ```
+
+**💡 Tip**: Use `make up` for fast dev, `make up-with-vault` to test Vault integration
 
 ---
 

@@ -1,9 +1,9 @@
 """NVIDIA API provider (OpenAI-compatible endpoint)."""
 
-import os
 from typing import AsyncIterator, List, Dict
 from openai import AsyncOpenAI
 from .base import LLMProvider
+from vault import get_secrets_config
 
 
 class NvidiaProvider(LLMProvider):
@@ -17,9 +17,11 @@ class NvidiaProvider(LLMProvider):
         """
         super().__init__(config)
         
-        api_key = os.getenv(config.get("api_key_env", "NVIDIA_API_KEY"))
+        # Get API key from Vault (falls back to environment if Vault unavailable)
+        secrets = get_secrets_config()
+        api_key = secrets.get('NVIDIA_API_KEY')
         if not api_key:
-            raise ValueError(f"API key not found in environment: {config.get('api_key_env')}")
+            raise ValueError("NVIDIA_API_KEY not found in Vault or environment")
         
         self.client = AsyncOpenAI(
             base_url=config["base_url"],

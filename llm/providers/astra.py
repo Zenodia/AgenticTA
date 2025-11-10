@@ -1,9 +1,9 @@
 """NVIDIA ASTRA deployment provider."""
 
-import os
 import aiohttp
 from typing import AsyncIterator, List, Dict
 from .base import LLMProvider
+from vault import get_secrets_config
 
 
 class AstraProvider(LLMProvider):
@@ -21,10 +21,11 @@ class AstraProvider(LLMProvider):
         deployment_id = config.get("deployment_id", "")
         self.endpoint = config["endpoint"].format(deployment_id=deployment_id)
         
-        # Get authentication token
-        token = os.getenv(config.get("token_env", "ASTRA_TOKEN"))
+        # Get authentication token from Vault (falls back to environment if Vault unavailable)
+        secrets = get_secrets_config()
+        token = secrets.get('ASTRA_TOKEN')
         if not token:
-            raise ValueError(f"ASTRA token not found in environment: {config.get('token_env')}")
+            raise ValueError("ASTRA_TOKEN not found in Vault or environment")
         
         self.headers = {
             "Authorization": f"Bearer {token}",

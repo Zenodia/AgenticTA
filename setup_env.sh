@@ -63,8 +63,7 @@ echo ""
 
 check_env "ASTRA_TOKEN" || echo "  (Optional - for Astra DB integration)"
 check_env "HF_TOKEN" || echo "  (Optional - for HuggingFace models)"
-check_env "DATADOG_EMBEDDING_API_TOKEN" || echo "  (Optional - for Datadog embeddings)"
-check_env "DATADOG_TOKEN" || echo "  (Optional - for Datadog monitoring)"
+check_env "DATADOG_EMBEDDING_API_TOKEN" || echo "  (Optional - for Datadog API access)"
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════╗"

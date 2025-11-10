@@ -26,6 +26,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.gradio
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -206,3 +207,21 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ============================================================================
+# Vault Integration (added for AgenticTA Vault setup)
+# ============================================================================
+
+# Vault configuration files (contains tokens - keep private!)
+.env.vault-local
+.env.vault-dev
+.env.vault-staging
+.env.vault-prod
+# Note: docker-compose.vault-local.yml is NOT secret (it's the compose override)
+
+# Environment file backups
+.env.backup
+.env.local
+
+# Vault development data
+vault-dev-data/

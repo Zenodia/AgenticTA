@@ -6,6 +6,10 @@ import os
 import shutil
 import time
 from pathlib import Path
+
+# Initialize Vault token auto-renewal
+import vault_init
+
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status
 from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe

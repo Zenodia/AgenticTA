@@ -494,6 +494,47 @@ A: Volumes in `./rag/deploy/compose/volumes/` directory.
 
 ---
 
+## 🔐 Vault Integration (Optional - Development Only)
+
+AgenticTA supports HashiCorp Vault for secure secret management. **This is entirely optional** and primarily for development testing or production deployments.
+
+### ⚠️ Important
+- **Vault is OPTIONAL** - AgenticTA works fine with `.env` file
+- **Development only** - Local vault-dev is NOT for production
+- **Secrets must be migrated** - Empty Vault won't work
+
+### Quick Setup
+
+```bash
+# 1. Start local Vault dev server
+make vault-dev-start
+
+# 2. Migrate secrets from .env (REQUIRED!)
+make vault-migrate
+
+# 3. Verify secrets
+make vault-check
+
+# 4. Stop when done
+make vault-dev-stop
+```
+
+### When to Use Vault
+
+**Use if:**
+- Testing vault integration
+- Production deployment with centralized secrets
+- Need secret rotation/audit logging
+
+**Don't use if:**
+- Local development only
+- Quick prototyping
+- `.env` file works fine
+
+For detailed Vault documentation, see `scripts/vault/README.md`
+
+---
+
 ## Success!
 
 If you can access http://localhost:7860 and see the Gradio UI, you're all set!
