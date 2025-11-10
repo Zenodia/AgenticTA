@@ -11,12 +11,28 @@ import requests
 import argparse
 from llm import LLMClient  # This automatically loads dotenv
 from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
-
+from vault.client import get_secret_with_fallback
+ 
 # Initialize the new LLM client
+
 llm_client = LLMClient()
+ 
+# Legacy LangChain LLM for fallback chains only
+
+nvidia_api_key = get_secret_with_fallback(
+
+    vault_path='agenticta/api-keys',
+
+    vault_key='nvidia_api_key',
+
+    env_var='NVIDIA_API_KEY',
+
+    required=True
+
+)
 
 # Legacy LangChain LLM for fallback chains only
-llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
+llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct", api_key=nvidia_api_key, temperature=0.3, max_tokens=36000)
 
 
 
@@ -289,13 +305,22 @@ summaries=[summary_1 , summary_2]
 chapters=[1,2]
 output = process_parallel_titles(summaries, chapters)
 print(type(output), output)"""
-pdf_files_loc="/workspace/mnt/pdfs/"
-"""
+
+
 # Test code (requires asyncio.run):
-# import asyncio
-# output = asyncio.run(chapter_gen_from_pdfs(pdf_files_loc))
-# chapter_output=parse_output_from_chapters(output)
-# for c in chapter_output:
-#     print("---"*10)
-#     print(type(c), c)
-"""
+if __name__ == "__main__":
+    # import asyncio
+    argparser = argparse.ArgumentParser(description="Generate Chapters")
+    argparser.add_argument(
+        "--pdf_file_loc",
+        type=str,
+        default="/workspace/mnt/pdfs/",
+        help="folder to the pdf files location",
+    )
+    args = argparser.parse_args()
+    pdf_files_loc=args.pdf_files_loc
+    output = asyncio.run(chapter_gen_from_pdfs(pdf_files_loc))
+    chapter_output=parse_output_from_chapters(output)
+    for c in chapter_output:
+        print("---"*10)
+        print(type(c), c)

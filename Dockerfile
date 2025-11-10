@@ -21,6 +21,7 @@ RUN python -m pip install --upgrade pip
 # Install Python dependencies (copy only requirements.txt)
 # This layer will be cached unless requirements.txt changes
 COPY requirements.txt /workspace/
+
 RUN pip install -r requirements.txt
 
 # Install additional packages
@@ -51,4 +52,5 @@ EXPOSE 8888 9999 8000 7860 7861 60808
 # See docker-compose.yml: volumes: - .:/workspace
 
 # Keep container running
-CMD ["sh", "-c", "tail -f /dev/null"]
+#CMD ["sh", "-c", "tail -f /dev/null"]
+CMD ["python","chapter_gen_from_file_names.py", "--pdf_loc","/workspace/pdfs/Swedish...pdf"]

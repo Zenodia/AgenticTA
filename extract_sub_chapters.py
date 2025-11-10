@@ -28,12 +28,28 @@ import requests
 import asyncio
 import re
 from collections import OrderedDict
-
+from vault.client import get_secret_with_fallback
+ 
 # Initialize the new LLM client
+
 llm_client = LLMClient()
+ 
+# Legacy LangChain LLM for fallback chains only
+
+nvidia_api_key = get_secret_with_fallback(
+
+    vault_path='agenticta/api-keys',
+
+    vault_key='nvidia_api_key',
+
+    env_var='NVIDIA_API_KEY',
+
+    required=True
+
+)
 
 # Legacy LangChain LLM for fallback chains only
-llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct")
+llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct", api_key=nvidia_api_key, temperature=0.3, max_tokens=36000)
 
 
 sub_topics_generation_prompt = """You are an expert in generation short chapter title to outline the studying curriculum.
@@ -205,7 +221,15 @@ def post_process_extract_sub_chapters(output):
 
 
 if __name__ == "__main__":
-    path_to_pdf_file="/workspace/mnt/pdfs/SwedenDriving_intro.pdf"
+    argparser = argparse.ArgumentParser(description="Generate Chapters")
+    argparser.add_argument(
+        "--pdf_file_loc",
+        type=str,
+        default="/workspace/mnt/pdfs/xxx.pdf",
+        help="avsolute path to a specific pdf file",
+    )
+    args = argparser.parse_args()
+    path_to_pdf_file=args.pdf_file_loc
     output = parallel_extract_pdf_page_and_text(path_to_pdf_file)
     output = post_process_extract_sub_chapters(output)
     """
