@@ -184,9 +184,28 @@ def get_secrets_config(use_vault: Optional[bool] = None, force_reload: bool = Fa
         if use_vault is None:
             vault_token = os.getenv('VAULT_TOKEN')
             use_vault = bool(vault_token)
-            logger.info(f"Auto-detected use_vault={use_vault} (VAULT_TOKEN={'set' if vault_token else 'not set'})")
+            
+            # Log prominently about Vault status
+            if use_vault:
+                logger.info("=" * 70)
+                logger.info("🔐 SECRETS MANAGEMENT: Using HashiCorp Vault")
+                logger.info("=" * 70)
+            else:
+                logger.warning("=" * 70)
+                logger.warning("⚠️  SECRETS MANAGEMENT: Vault NOT available")
+                logger.warning("⚠️  Using environment variables from .env file")
+                logger.warning("⚠️  This is INSECURE for production!")
+                logger.warning("=" * 70)
+                logger.warning("To enable Vault:")
+                logger.warning("  1. Stop services: make down")
+                logger.warning("  2. Start with Vault: make up-with-vault")
+                logger.warning("  3. Migrate secrets: make vault-migrate")
+                logger.warning("=" * 70)
         else:
-            logger.info(f"Explicit use_vault={use_vault}")
+            if use_vault:
+                logger.info(f"🔐 Vault explicitly enabled")
+            else:
+                logger.warning(f"⚠️  Vault explicitly disabled - using environment variables")
         
         _secrets_config = SecretsConfig(use_vault=use_vault)
     
