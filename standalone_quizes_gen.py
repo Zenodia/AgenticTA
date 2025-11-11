@@ -12,15 +12,10 @@ load_dotenv()
 # Legacy LangChain LLM for fallback chains only
 
 astra_api_key = get_secret_with_fallback(
-
-    vault_path='agenticta/api-keys',
-
+    vault_path='agenticta/auth-tokens',
     vault_key='astra_token',
-
     env_var='ASTRA_TOKEN',
-
     required=True
-
 )
 
 def inference_call(system_prompt, user_prompt):    
