@@ -2,13 +2,15 @@
 # Includes external RAG services from local rag folder
 
 # Include external compose files
-include:
-  - path: ./rag/deploy/compose/vectordb.yaml
-    env_file: ./rag/deploy/compose/.env
-  - path: ./rag/deploy/compose/docker-compose-ingestor-server.yaml
-    env_file: ./rag/deploy/compose/.env
-  - path: ./rag/deploy/compose/docker-compose-rag-server.yaml
-    env_file: ./rag/deploy/compose/.env
+# NOTE: The 'include' directive requires Docker Compose v2.20+
+# For older versions, use the Makefile targets which use multiple -f flags
+# include:
+#   - path: ./rag/deploy/compose/vectordb.yaml
+#     env_file: ./rag/deploy/compose/.env
+#   - path: ./rag/deploy/compose/docker-compose-ingestor-server.yaml
+#     env_file: ./rag/deploy/compose/.env
+#   - path: ./rag/deploy/compose/docker-compose-rag-server.yaml
+#     env_file: ./rag/deploy/compose/.env
 
 services:
   # ============================================
@@ -33,9 +35,6 @@ services:
       - .:/workspace
       # Mount PDF directory
       - /mnt/ZenoHD/astra_mnt/:/workspace/mnt/
-      # Exclude Python cache from host (use container's cache)
-      - /workspace/__pycache__
-      - /workspace/llm/__pycache__
     ports:
       - "7860:7860"  # Gradio UI
       - "2345:2345"
@@ -45,10 +44,11 @@ services:
     stdin_open: true
     tty: true
     command: /bin/bash
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # Uncomment below if you have GPU available and want to use it
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
