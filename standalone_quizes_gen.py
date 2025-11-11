@@ -1,0 +1,300 @@
+import requests
+import os
+import ast
+import json
+from colorama import Fore
+from nodes import init_user_storage,user_exists,load_user_state, update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
+from vault.client import get_secret_with_fallback
+from dotenv import load_dotenv
+load_dotenv()
+# Initialize the new LLM client
+ 
+# Legacy LangChain LLM for fallback chains only
+
+astra_api_key = get_secret_with_fallback(
+
+    vault_path='agenticta/api-keys',
+
+    vault_key='astra_token',
+
+    env_var='ASTRA_TOKEN',
+
+    required=True
+
+)
+
+def inference_call(system_prompt, user_prompt):    
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {astra_api_key}',
+    }
+    
+    json_data = {
+        'model': 'nvidia/llama-3.3-nemotron-super-49b-v1',
+        'messages': [
+            {"role": "system", "content": system_prompt},
+            {'role': 'user','content': user_prompt},
+        ],        
+    "temperature":0.6,
+    "top_p":0.95,
+    "max_tokens":36000,
+    'stream': False,
+    }
+    
+    response = requests.post(
+        'https://datarobot.prd.astra.nvidia.com/api/v2/deployments/688e407ed8a8e0543e6d9b80/chat/completions',
+        headers=headers,
+        json=json_data,
+    )
+    
+    return response 
+
+
+def get_quiz(title, document_summary, chunk_text, additional_instruction):
+        
+    user_prompt_str = QUESTION_GENERATION_USER_PROMPT.format(
+                    title=title,
+                    document_summary=document_summary,
+                    text_chunk=chunk_text,
+                    additional_instructions=additional_instruction,
+                )
+    
+    try:
+        response = inference_call(QUESTION_GENERATION_SYSTEM_PROMPT, user_prompt_str)
+        output_d=output.json()
+        output_str= output_d['choices'][0]["message"]["content"]
+    except Exception as exc:
+        output_str= "an error happened during inference call, error msg = \n" + exec 
+    
+    return output_str 
+
+               
+
+QUESTION_GENERATION_SYSTEM_PROMPT_HEADER = """## Your Role
+
+You are an expert educational content creator specializing in crafting thoughtful, rich, and engaging questions based on provided textual information. Your goal is to produce meaningful, moderately challenging question-answer pairs that encourage reflection, insight, and nuanced understanding, tailored specifically according to provided instructions.
+
+## Input Structure
+
+Your input consists of:
+
+<additional_instructions>
+[Specific instructions, preferences, or constraints guiding the question creation.]
+</additional_instructions>
+
+<title>
+[Document title]
+</title>
+
+<document_summary>
+[Concise summary providing contextual background and overview.]
+</document_summary>
+
+<text_chunk>
+[The single text segment to analyze.]
+</text_chunk>
+
+## Primary Objective
+
+Your goal is to generate a thoughtful set of question-answer pairs from a single provided `<text_chunk>`. Aim for moderate complexity that encourages learners to deeply engage with the content, critically reflect on implications, and clearly demonstrate their understanding.
+
+### Context Fields:
+
+- `<title>`: Contextualizes the content.
+- `<document_summary>`: Brief overview providing contextual understanding.
+- `<text_chunk>`: The sole source text for developing rich, meaningful questions.
+- `<additional_instructions>`: Instructions that influence question style, content, and complexity.
+
+## Analysis Phase
+
+Conduct careful analysis within `<document_analysis>` XML tags, following these steps:
+
+1. **Thoughtful Content Examination**
+   - Carefully analyze the given text_chunk, identifying central ideas, nuanced themes, and significant relationships within it.
+
+2. **Concept Exploration**
+   - Consider implicit assumptions, subtle details, underlying theories, and potential applications of the provided information.
+
+3. **Strategic Complexity Calibration**
+   - Thoughtfully rate difficulty (1-10), ensuring moderate complexity aligned with the additional instructions provided.
+
+4. **Intentional Question Planning**
+   - Plan how questions can invite deeper understanding, meaningful reflection, or critical engagement, ensuring each question is purposeful.
+
+## Additional Instructions for Handling Irrelevant or Bogus Information
+
+### Identification and Ignoring of Irrelevant Information:
+
+- **Irrelevant Elements:** Explicitly disregard hyperlinks, advertisements, headers, footers, navigation menus, disclaimers, social media buttons, or any content clearly irrelevant or external to the core information of the text chunk.
+- **Bogus Information:** Detect and exclude any information that appears nonsensical or disconnected from the primary subject matter.
+
+### Decision Criteria for Question Generation:
+
+- **Meaningful Content Requirement:** Only generate questions if the provided `<text_chunk>` contains meaningful, coherent, and educationally valuable content.
+- **Complete Irrelevance:** If the entire `<text_chunk>` consists exclusively of irrelevant, promotional, web navigation, footer, header, or non-informational text, explicitly state this in your analysis and do NOT produce any question-answer pairs.
+
+### Documentation in Analysis:
+
+- Clearly document the rationale in the `<document_analysis>` tags when identifying irrelevant or bogus content, explaining your reasons for exclusion or inclusion decisions.
+- Briefly justify any decision NOT to generate questions due to irrelevance or poor quality content.
+
+
+## Question Generation Guidelines
+
+### Encouraged Question Characteristics:
+
+- **Thoughtful Engagement**: Prioritize creating questions that inspire deeper thought and nuanced consideration.
+- **Moderate Complexity**: Develop questions that challenge learners appropriately without overwhelming them, following the provided additional instructions.
+- **Self-contained Clarity**: Questions and answers should contain sufficient context, clearly understandable independently of external references.
+- **Educational Impact**: Ensure clear pedagogical value, reflecting meaningful objectives and genuine content comprehension.
+- **Conversational Tone**: Formulate engaging, natural, and realistic questions appropriate to the instructional guidelines.
+
+### Permitted Question Types:
+
+- Analytical
+- Application-based
+- Clarification
+- Counterfactual
+- Conceptual
+- True-False
+- Factual
+- Open-ended
+- False-premise
+- Edge-case
+
+(You do not need to use every question type, only those naturally fitting the content and instructions.)"""
+QUESTION_GENERATION_SYSTEM_PROMPT_OUTPUT = """## Output Structure
+
+Present your final output as JSON objects strictly adhering to this Pydantic model within `<output_json>` XML tags:
+
+```python
+class QuestionAnswerPair(BaseModel):
+    thought_process: str # Clear, detailed rationale for selecting question and analysis approach
+    question_type: Literal["analytical", "application-based", "clarification",
+                           "counterfactual", "conceptual", "true-false",
+                           "factual", "open-ended", "false-premise", "edge-case"]
+    question: str
+    answer: str
+    estimated_difficulty: int  # 1-10, calibrated according to additional instructions
+    citations: List[str]  # Direct quotes from the text_chunk supporting the answer
+```
+
+## Output Format
+
+Begin by thoughtfully analyzing the provided text_chunk within `<document_analysis>` XML tags. Then present the resulting JSON-formatted QuestionAnswerPairs clearly within `<output_json>` XML tags."""
+
+QUESTION_GENERATION_SYSTEM_PROMPT_OUTPUT_MULTI = """## Output Structure
+
+Present your final output as JSON objects strictly adhering to this Pydantic model within `<output_json>` XML tags:
+
+```python
+class MultipleChoiceQuestion(BaseModel):
+    thought_process: str  # Rationale for the question and distractors
+    question_type: Literal["analytical", "application-based", "clarification",
+                           "counterfactual", "conceptual", "true-false",
+                           "factual", "false-premise", "edge-case"]
+    question: str
+    answer: str  # One of "A", "B", "C", or "D"
+    choices: List[str]  # Must contain exactly 4 items
+    estimated_difficulty: int  # 1-10
+    citations: List[str]  # Direct support from the text_chunk
+```
+
+## Output Format
+
+Begin by thoughtfully analyzing the provided <text_chunk> within <document_analysis> XML tags. Your analysis should identify the key concepts, technical details, and reasoning opportunities found in the text.
+
+Then present the resulting multiple-choice questions as valid JSON objects within <output_json> tags, strictly following this structure:
+
+<document_analysis>
+- Key concept: ...
+- Important facts: ...
+- Reasoning opportunities: ...
+</document_analysis>
+
+<output_json>
+[
+  {
+    "thought_process": "This question targets understanding of how the chunk explains the purpose of semantic chunking in document processing. Distractors are phrased using near-synonyms or subtle distortions of the true concept.",
+    "question_type": "conceptual",
+    "question": "What is the primary reason for using semantic chunking in document preprocessing?",
+    "choices": [
+      "(A) To compress the document into fewer tokens.",
+      "(B) To group content based on semantic similarity and token limits.",
+      "(C) To translate the text into multiple languages.",
+      "(D) To strip metadata and formatting from the input file."
+    ],
+    "answer": "B",
+    "estimated_difficulty": 6,
+    "citations": ["Semantic chunking partitions documents into coherent segments based on semantic similarity and token length constraints."]
+  },
+  ...
+]
+</output_json>"""
+
+QUESTION_GENERATION_SYSTEM_PROMPT_FOOTER = """## Important Notes
+- Strive to generate questions that inspire genuine curiosity, reflection, and thoughtful engagement.
+- Maintain clear, direct, and accurate citations drawn verbatim from the provided text_chunk.
+- Ensure complexity and depth reflect thoughtful moderation as guided by the additional instructions.
+- Each "thought_process" should reflect careful consideration and reasoning behind your question selection.
+- Ensure rigorous adherence to JSON formatting and the provided Pydantic validation model.
+- When generating questions, NEVER include phrases like 'as per the text,' 'according to the document,' or any similar explicit references. Questions should inherently integrate content naturally and stand independently without explicit references to the source material
+"""
+
+QUESTION_GENERATION_SYSTEM_PROMPT = (
+    QUESTION_GENERATION_SYSTEM_PROMPT_HEADER
+    + QUESTION_GENERATION_SYSTEM_PROMPT_OUTPUT
+    + QUESTION_GENERATION_SYSTEM_PROMPT_FOOTER
+)
+
+
+QUESTION_GENERATION_USER_PROMPT = """<title>
+{title}
+</title>
+
+<document_summary>
+{document_summary}
+</document_summary>
+
+<text_chunk>
+{text_chunk}
+</text_chunk>
+
+<additional_instructions>
+{additional_instructions}
+</additional_instructions>"""
+
+def quiz_output_parser(output_str:str)-> list[dict]:
+    
+    start_idx=output_str.index('<output_json>')+13
+    end_idx=output_str.index('</output_json>')
+    quizes_ls=json.loads(output_str[start_idx:end_idx].replace('```json',""))
+    return quizes_ls
+
+
+if __name__ == "__main__":
+    user_state = load_user_state(user_id)
+    print("----"*10)
+    print(type(user_state), user_state.keys())
+    print(type(user_state["curriculum"][0]), user_state["curriculum"][0].keys())
+    c=user_state["curriculum"][0]
+    print(type(c["active_chapter"]), type(c["study_plan"]), type(c["status"]))
+    print(" ----> currently active_chapter is = \n ----------------")
+    active_chapter=c["active_chapter"]
+    print(f"active_chapter = {active_chapter.number}:{active_chapter.name}")
+
+    print("\n Pick the 1st sub topic as a test ")
+    title=active_chapter.name
+    summary=active_chapter.sub_topics[0].sub_topic
+    text_chunk=active_chapter.sub_topics[0].study_material
+    quizes_ls= get_quiz(title, summary, text_chunk, "")
+    print("\n"*3)
+    print(Fore.YELLOW + "\n Generated Quiz from SubTopics", '\n'.join([f"{subtopic.number}:{subtopic.sub_topic}" for subtopic in active_chapter.sub_topics]))
+    i=0
+    for quiz in quizes_ls:
+        print(f"------------------ quiz {str(i)} ------------------ ")
+        print(quiz)
+        print('\n'+ Fore.RESET)
+
+    
