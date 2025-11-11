@@ -1,65 +1,139 @@
-# Git files
-.git
+# .dockerignore - Exclude files from Docker build context
+
+# ========================================
+# Secrets and Sensitive Files (CRITICAL!)
+# ========================================
+.env
+.env.*
+!.env.example
+*.env
+env.vault-*
+!env.vault-*.example
+**/.vault-token
+**/vault-token*
+**/*secret*
+**/*password*
+**/*token*
+**/*key*.pem
+
+# EXCEPTION: Allow vault/token_manager.py (it's code, not a secret!)
+!vault/token_manager.py
+
+# ========================================
+# Git and Version Control
+# ========================================
+.git/
 .gitignore
 .gitattributes
+.github/
 
-# Python cache
-__pycache__
+# ========================================
+# Development Files
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ========================================
+# Python Cache and Build
+# ========================================
+__pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-*.egg-info
-dist
-build
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
 
-# Virtual environments
-.venv
-venv
-ENV
-env
+# ========================================
+# Virtual Environments
+# ========================================
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 
-# IDE files
-.vscode
-.idea
-*.swp
-*.swo
-*~
+# ========================================
+# Jupyter and Notebooks
+# ========================================
+.ipynb_checkpoints/
+*.ipynb
 
-# Logs
-*.log
-logs/
-*.tmp
-tmp/
-
-# Data and outputs
-mnt/
-pdfs/
-*.pdf
-*.csv
-*.parquet
-
-# Docker
+# ========================================
+# Docker Files (Don't Need in Build)
+# ========================================
 Dockerfile
+Dockerfile.*
 docker-compose*.yml
 .dockerignore
 
-# Documentation (not needed in image)
-*.md
-docs/
+# ========================================
+# Data and User Files
+# ========================================
+mnt/
+volumes/
+data/
+*.pdf
+test_pdfs/
+memory.json
 
-# Test files
-tests/
+# ========================================
+# Logs and Temporary Files
+# ========================================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# ========================================
+# Documentation (if large)
+# ========================================
+# Uncomment if you don't want docs in image:
+# docs/
+# *.md
+# !README.md
+
+# ========================================
+# CI/CD Files
+# ========================================
+.gitlab-ci.yml
+.github/
+Makefile
+*.sh
+
+# ========================================
+# Testing Files (optional)
+# ========================================
 test_*.py
 *_test.py
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Temporary files
-*.bak
-*.swp
-*.tmp
-.cache/
-
+tests/

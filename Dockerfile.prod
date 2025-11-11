@@ -1,0 +1,90 @@
+# Production Dockerfile for AgenticTA
+# Build: docker build -f Dockerfile.prod -t agenticta:latest .
+# Push:  docker tag agenticta:latest nvcr.io/nvstaging/agenticta:latest
+#        docker push nvcr.io/nvstaging/agenticta:latest
+
+FROM python:3.12-slim
+
+# Set timezone
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Stockholm
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Install system dependencies
+RUN apt update -y && \
+    apt install -y procps curl && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /workspace
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip
+
+# Install Python dependencies (copy only requirements.txt first for better caching)
+COPY requirements.txt /workspace/
+RUN pip install -r requirements.txt
+
+# Install additional packages
+RUN pip install -U \
+    gretel_client \
+    datasets \
+    langchain-core \
+    langgraph \
+    langchain-nvidia-ai-endpoints \
+    openai \
+    langchain-community \
+    faiss-gpu-cu12 \
+    jupyterlab \
+    fastmcp \
+    colorama \
+    markdown \
+    gradio \
+    nv-ingest==25.9.0 \
+    nv-ingest-api==25.9.0 \
+    nv-ingest-client==25.9.0 \
+    milvus-lite==2.4.12 \
+    pypdf
+
+# Copy application code into image
+# (Order matters for Docker layer caching)
+
+# Core Python files (root directory)
+COPY *.py /workspace/
+
+# Configuration files (non-sensitive)
+COPY llm_config.yaml /workspace/
+COPY pytest.ini /workspace/
+COPY logging_config.py /workspace/
+
+# Application modules (internal only)
+# Note: Copying in this order to maximize cache efficiency
+COPY llm/ /workspace/llm/
+COPY scripts/ /workspace/scripts/
+COPY self_refine/ /workspace/self_refine/
+COPY src/ /workspace/src/
+
+# Copy vault last to ensure fresh copy (includes token_manager.py, client.py, config.py, etc.)
+COPY vault/ /workspace/vault/
+
+# External modules (rag/, study_buddy_agent/) not included - external dependencies
+# Tests not included - blocked by .dockerignore and not needed in production
+
+# Documentation (optional, but useful)
+COPY docs/ /workspace/docs/
+COPY README.md QUICKSTART.md SETUP_GUIDE.md /workspace/
+
+# Create directories for runtime data
+RUN mkdir -p /workspace/mnt/pdfs /workspace/volumes
+
+# Expose ports
+EXPOSE 7860 8000 8888 9999 7861 60808
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:7860/ || exit 1
+
+# Default command (can be overridden at runtime)
+CMD ["python", "gradioUI.py"]
+

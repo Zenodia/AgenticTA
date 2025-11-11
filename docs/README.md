@@ -1,5 +1,20 @@
 # AgenticTA Documentation
 
+## Production Deployment 🚀
+
+1. **[PRODUCTION_QUICKSTART.md](PRODUCTION_QUICKSTART.md)** ⭐ **DEPLOY IN 5 MINUTES**
+   - Fastest way to get AgenticTA into production
+   - One-command build and push to Artifactory
+   - Quick reference for common deployment tasks
+
+2. **[ARTIFACTORY_DEPLOYMENT.md](ARTIFACTORY_DEPLOYMENT.md)**
+   - Complete deployment guide for Artifactory
+   - CI/CD integration patterns
+   - Security checklist and best practices
+   - Kubernetes and Docker Compose examples
+
+---
+
 ## Vault Documentation
 
 ### 📚 Main Guides
