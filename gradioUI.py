@@ -10,6 +10,60 @@ from pathlib import Path
 # Initialize Vault token auto-renewal
 import vault_init
 
+# Check vault status for UI display
+def get_vault_status_text():
+    """Get formatted vault status text for UI display with details."""
+    vault_token = os.getenv('VAULT_TOKEN')
+    
+    if vault_token:
+        # Try to get detailed vault info
+        try:
+            from vault import get_secrets_config
+            config = get_secrets_config()
+            
+            # Count available secrets
+            secrets_list = []
+            if config.get('NVIDIA_API_KEY'):
+                secrets_list.append("NVIDIA API")
+            if config.get('HF_TOKEN'):
+                secrets_list.append("HuggingFace")
+            if config.get('ASTRA_TOKEN'):
+                secrets_list.append("Astra")
+            if config.get('DATADOG_EMBEDDING_API_TOKEN'):
+                secrets_list.append("Datadog")
+            
+            secret_count = len(secrets_list)
+            secrets_text = ", ".join(secrets_list) if secrets_list else "None"
+            
+            return f"""🔐 **Secrets Management: Vault**  
+**Status:** Active  
+**Keys Available:** {secret_count} ({secrets_text})  
+**Security:** Production-ready"""
+        except Exception as e:
+            return f"""🔐 **Secrets Management: Vault**  
+**Status:** Connected  
+**Details:** Unable to enumerate keys"""
+    else:
+        # Using environment variables
+        secrets_list = []
+        if os.getenv('NVIDIA_API_KEY'):
+            secrets_list.append("NVIDIA API")
+        if os.getenv('HF_TOKEN'):
+            secrets_list.append("HuggingFace")
+        if os.getenv('ASTRA_TOKEN'):
+            secrets_list.append("Astra")
+        if os.getenv('DATADOG_EMBEDDING_API_TOKEN'):
+            secrets_list.append("Datadog")
+        
+        secret_count = len(secrets_list)
+        secrets_text = ", ".join(secrets_list) if secrets_list else "None"
+        
+        return f"""⚠️ **Secrets Management: Environment Variables**  
+**Status:** Using .env file  
+**Keys Available:** {secret_count} ({secrets_text})  
+**Security:** ⚠️ Not secure for production!  
+💡 *Use `make up-with-vault` to enable Vault*"""
+
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status
 from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe
@@ -309,6 +363,13 @@ with gr.Blocks(title="Study Assistant") as demo:
                 placeholder="E.g., encouraging, knowledgeable in science..."
             )
             
+            # Vault status indicator at bottom
+            with gr.Row():
+                vault_status = gr.Markdown(
+                    value=get_vault_status_text(),
+                    elem_classes=["vault-status"]
+                )
+            
         with gr.Column(scale=2):
             # Curriculum section
             curriculum_col = gr.Column(visible=False)
@@ -403,6 +464,18 @@ demo.css = """
 .gradio-button.secondary {
     background-color: #2ecc71;
     border: none;
+}
+.vault-status {
+    font-size: 0.85em;
+    padding: 12px;
+    margin-top: 20px;
+    border-radius: 6px;
+    background-color: #f8f9fa;
+    border-left: 4px solid #6c757d;
+    line-height: 1.6;
+}
+.vault-status p {
+    margin: 4px 0;
 }
 """
 

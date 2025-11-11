@@ -107,7 +107,8 @@ class VaultClient:
         try:
             response = self.client.secrets.kv.v2.read_secret_version(
                 mount_point=self.mount_point,
-                path=path
+                path=path,
+                raise_on_deleted_version=False  # Graceful handling, future-proof for hvac v3.0.0
             )
             secret_data = response['data']['data']
             

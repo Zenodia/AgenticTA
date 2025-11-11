@@ -32,7 +32,7 @@ nvidia_api_key = get_secret_with_fallback(
 )
 
 # Legacy LangChain LLM for fallback chains only
-llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct", api_key=nvidia_api_key, temperature=0.3, max_tokens=36000)
+llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct", api_key=nvidia_api_key, temperature=0.3, max_completion_tokens=36000)
 
 
 

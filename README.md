@@ -30,10 +30,20 @@ make up && sleep 30 && make gradio
 
 ## Documentation
 
+### Development
 - **[QUICKSTART.md](QUICKSTART.md)** - Get up and running fast (all 4 modes)
 - **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Detailed setup instructions
 - **[llm/README.md](llm/README.md)** - LLM module architecture
-- **[vault/](vault/)** - Vault integration documentation
+
+### Production Deployment 🚀
+- **[PRODUCTION_QUICKSTART.md](docs/PRODUCTION_QUICKSTART.md)** - Deploy to Artifactory in 5 minutes ⭐
+- **[docs/ARTIFACTORY_DEPLOYMENT.md](docs/ARTIFACTORY_DEPLOYMENT.md)** - Complete deployment guide
+- **[docs/VAULT_DEPLOYMENT_GUIDE.md](docs/VAULT_DEPLOYMENT_GUIDE.md)** - Vault setup & token management
+- **[docs/vault-workflow-diagram.md](docs/vault-workflow-diagram.md)** - Visual workflows
+
+### Code & Utilities
+- **[vault/](vault/)** - Vault integration code
+- **[docs/](docs/)** - All documentation
 
 ---
 

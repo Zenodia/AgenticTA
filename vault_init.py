@@ -33,12 +33,29 @@ def initialize_vault():
         logger.debug("Vault already initialized")
         return
     
+    # Log Vault status prominently
+    try:
+        from vault import log_vault_status
+        log_vault_status()
+    except ImportError:
+        # If vault module not available, log manually
+        vault_token = os.getenv('VAULT_TOKEN')
+        print("\n" + "=" * 70)
+        if vault_token:
+            print("🔐 SECRETS MANAGEMENT: Using HashiCorp Vault")
+        else:
+            print("⚠️  SECRETS MANAGEMENT: Vault NOT available")
+            print("⚠️  Using environment variables from .env file")
+            print("⚠️  This is INSECURE for production!")
+        print("=" * 70 + "\n")
+    
     # Check if Vault is configured
     vault_addr = os.getenv('VAULT_ADDR')
     vault_token = os.getenv('VAULT_TOKEN')
     
     if not vault_addr or not vault_token:
         logger.info("Vault not configured - using .env fallback")
+        _initialized = True  # Mark as initialized so we don't show the banner again
         return
     
     try:
