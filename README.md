@@ -22,9 +22,11 @@ make up && sleep 30 && make gradio
 
 - **Smart Curriculum Generation** - AI analyzes PDFs and creates learning paths
 - **Interactive Study Materials** - Generated study guides with examples
+- **quiz generation per sub topic** - generating multi-choice quizes to test your knowledge
+- **self-improve** - minimal imlplementation self-refinement via natural langauge feedback improved via prompt mutation.
 - **Study Buddy Chat** - Ask questions about your materials
-- **RAG-Powered** - Retrieval-augmented generation for accurate answers
-- **Scalable LLM Integration** - Supports multiple AI providers
+- **RAG-Powered** - leveraging NVIDIA's NeMo Retriever NIM as RAG (Retrieval-Augmented Generation) enhancing study-buddy conversations.
+- **Scalable LLM Integration** - Supports multiple AI providers bute tested on NVIDIA's NIM LLMs
 
 ---
 
