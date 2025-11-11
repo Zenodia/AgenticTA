@@ -19,6 +19,9 @@ Production (No Fallback):
 For more details, see the documentation in scripts/vault/
 """
 
+import os
+import logging
+
 from vault.client import VaultClient, get_vault_client, get_secret_with_fallback
 from vault.config import (
     SecretsConfig,
@@ -29,6 +32,37 @@ from vault.config import (
     get_datadog_embedding_token,
 )
 from vault.token_manager import TokenManager, get_token_manager, start_token_manager
+
+logger = logging.getLogger(__name__)
+
+
+def log_vault_status():
+    """
+    Log the current Vault configuration status.
+    
+    This function should be called at application startup to make it clear
+    whether Vault is being used for secrets management.
+    """
+    vault_token = os.getenv('VAULT_TOKEN')
+    
+    print("\n" + "=" * 70)
+    if vault_token:
+        print("🔐 SECRETS MANAGEMENT: Using HashiCorp Vault")
+        print("=" * 70)
+        logger.info("Vault is enabled for secrets management")
+    else:
+        print("⚠️  SECRETS MANAGEMENT: Vault NOT available")
+        print("⚠️  Using environment variables from .env file")
+        print("⚠️  This is INSECURE for production!")
+        print("=" * 70)
+        print("To enable Vault:")
+        print("  1. Stop services: make down")
+        print("  2. Start with Vault: make up-with-vault")
+        print("  3. Migrate secrets: make vault-migrate")
+        print("=" * 70)
+        logger.warning("Vault is NOT enabled - using environment variables")
+    print()
+
 
 __all__ = [
     # Client
@@ -47,6 +81,8 @@ __all__ = [
     'TokenManager',
     'get_token_manager',
     'start_token_manager',
+    # Status
+    'log_vault_status',
 ]
 
 __version__ = '1.0.0'
