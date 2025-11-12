@@ -1,4 +1,9 @@
 # Byte-compiled / optimized / DLL files
+workspace/
+src/
+data/
+rag/
+/workspace/
 volumes/
 __pycache__/
 *.py[codz]
