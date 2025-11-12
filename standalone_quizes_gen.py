@@ -6,7 +6,7 @@ from colorama import Fore
 from nodes import init_user_storage,user_exists,load_user_state, update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
 import asyncio
 from vault.client import get_secret_with_fallback
-
+import re
 from dotenv import load_dotenv
 load_dotenv()
 # Initialize the new LLM client
@@ -262,21 +262,53 @@ QUESTION_GENERATION_USER_PROMPT = """<title>
 {additional_instructions}
 </additional_instructions>"""
 
-def quiz_output_parser(output_str:str)-> list[dict]:
+
+def quiz_output_parser(output_str: str) -> list[dict]:
+    # Find the start of the JSON content
+    start_marker = '<output_json>'
+    if start_marker not in output_str:
+        print("No <output_json> marker found")
+        return []
     
-    start_idx=output_str.index('<output_json>')+13
-    output_str=output_str[start_idx:]
-    if '</output_json>' in output_str:
-        
-        end_idx=output_str.index('</output_json>')
-        quizes_ls=json.loads(output_str[start_idx:end_idx].replace('```json',""))
-    elif '[' in output_str:
-        start_idx=output_str.index('[')
-        end_idx=output_str.rindex(']')+1
-        quizes_ls=json.loads(output_str[start_idx:end_idx])
+    start_idx = output_str.index(start_marker) + len(start_marker)
+    json_str = output_str[start_idx:]
+    
+    # Find the end of the JSON content if closing tag exists
+    end_marker = '</output_json>'
+    if end_marker in json_str:
+        print("Found closing tag")
+        end_idx = json_str.index(end_marker)
+        json_str = json_str[:end_idx]
     else:
-        quizes_ls=[]
-    return quizes_ls
+        print("No closing tag found, using remaining string")
+    
+    # Clean up markdown code fences and whitespace
+    json_str = json_str.strip()
+    json_str = json_str.replace('```json', '').replace('```', '')
+    json_str = json_str.strip()
+    
+    # Remove inline notes that break JSON (e.g., *Note: ...)
+    # This regex removes text like: ] *Note: ...* or ] *Note: ...*
+    json_str = re.sub(r'\]\s*\*Note:.*?\*', ']', json_str)
+    
+    # Parse the JSON
+    try:
+        quizes_ls = json.loads(json_str)
+        if isinstance(quizes_ls, list):
+            return quizes_ls
+        else:
+            print("Parsed JSON is not a list")
+            return []
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON: {e}")
+        print(f"JSON string preview (first 500 chars):\n{json_str[:500]}")
+        print(f"\nJSON string preview (around error position):")
+        error_pos = e.pos if hasattr(e, 'pos') else 2364
+        start = max(0, error_pos - 100)
+        end = min(len(json_str), error_pos + 100)
+        print(f"{json_str[start:end]}")
+        return []
+
 
 
 if __name__ == "__main__":
@@ -298,19 +330,23 @@ if __name__ == "__main__":
     summary=active_chapter.sub_topics[0].sub_topic
     text_chunk=active_chapter.sub_topics[0].study_material
     quizes_ls= get_quiz(title, summary, text_chunk, "")
-    #quizzes_d_ls=quiz_output_parser(quizes_ls)
+    quizzes_d_ls=quiz_output_parser(quizes_ls)
     print("\n"*3)
-    print(type(quizes_ls),type(quizes_ls[0]), len(quizes_ls), quizes_ls)
+    #print(type(quizes_ls),type(quizes_ls[0]), len(quizes_ls), quizes_ls)
     #print(Fore.YELLOW + "\n Generated Quiz from SubTopics", '\n'.join([f"{subtopic.number}:{subtopic.sub_topic}" for subtopic in active_chapter.sub_topics]))
     print("==="*10 , ">")
-    #print(type(quizzes_d_ls),type(quizzes_d_ls[0]), len(quizzes_d_ls), quizzes_d_ls)
+    print(type(quizzes_d_ls),type(quizzes_d_ls[0]), len(quizzes_d_ls), quizzes_d_ls)
 
-    """
-    updated_user: User = asyncio.run(add_quiz_to_subtopic(
+    for quiz in quizzes_d_ls:
+        print("\n"+"--"*10)
+        print(f"Q: {quiz['question']}\nA: {quiz['answer']}\nType: {quiz['question_type']}\nDifficulty: {quiz['estimated_difficulty']}\nCitations: {quiz['citations']}\nThought Process: {quiz['thought_process']}")
+    print("\n"*3)
+    updated_user = asyncio.run(add_quiz_to_subtopic(
         user_id=user_id,
         save_to=save_to,
         subtopic_number=0,
         quiz=quizzes_d_ls
-    ))"""
+    ))
+    print(type(updated_user))
 
     
