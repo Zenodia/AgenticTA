@@ -225,7 +225,7 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--pdf_file_loc",
         type=str,
-        default="/workspace/mnt/pdfs/xxx.pdf",
+        default="/workspace/mnt/pdfs/SwedenDriving_intro.pdf",
         help="avsolute path to a specific pdf file",
     )
     args = argparser.parse_args()

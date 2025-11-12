@@ -98,6 +98,7 @@ def query_routing(data):
         next_node="continue"
     elif "quiz" in output : 
         data["intermediate_steps"].append( "add_quiz_to_subtopic")
+
         next_node="continue"
     elif "next_sub_topic" in output:
         data["intermediate_steps"].append("move_to_next_subtopic")
@@ -158,7 +159,14 @@ def execute_tools(data):
         
         data["agent_final_output"]="move to next chapter"
     elif "quiz" in tool  : 
-        
+        if existing_user :
+            c=u["curriculum"][0]
+            active_chapter=c["active_chapter"]
+            title=active_chapter.name
+            summary=active_chapter.sub_topics[0].sub_topic
+            text_chunk=active_chapter.sub_topics[0].study_material
+            quizes_ls= get_quiz(title, summary, text_chunk, "")
+            active_chapter.sub_topics[0].quizes=quizes_ls
         data["agent_final_output"]="added quiz , take a look at quiz session"
     elif "next_subtopic" in tool :
         

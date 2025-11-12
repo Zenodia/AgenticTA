@@ -26,11 +26,11 @@ async def test_llm_client_initialization(mock_env_vars):
     
     # Test that config actually loads by creating a handler
     # This will fail if llm_config.yaml is missing or invalid
-    handler = client._get_handler("chapter_title_generation")
+    handler = client._get_handler("extract_sub_chapters")
     assert handler is not None
     
     # Verify handler caching works
-    handler2 = client._get_handler("chapter_title_generation")
+    handler2 = client._get_handler("extract_sub_chapters")
     assert handler is handler2, "Handler should be cached"
 
 
