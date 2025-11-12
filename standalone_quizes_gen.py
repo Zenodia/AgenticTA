@@ -4,7 +4,9 @@ import ast
 import json
 from colorama import Fore
 from nodes import init_user_storage,user_exists,load_user_state, update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
+import asyncio
 from vault.client import get_secret_with_fallback
+
 from dotenv import load_dotenv
 load_dotenv()
 # Initialize the new LLM client
@@ -57,7 +59,7 @@ def get_quiz(title, document_summary, chunk_text, additional_instruction):
     
     try:
         response = inference_call(QUESTION_GENERATION_SYSTEM_PROMPT, user_prompt_str)
-        output_d=output.json()
+        output_d=response.json()
         output_str= output_d['choices'][0]["message"]["content"]
     except Exception as exc:
         output_str= "an error happened during inference call, error msg = \n" + exec 
@@ -263,12 +265,24 @@ QUESTION_GENERATION_USER_PROMPT = """<title>
 def quiz_output_parser(output_str:str)-> list[dict]:
     
     start_idx=output_str.index('<output_json>')+13
-    end_idx=output_str.index('</output_json>')
-    quizes_ls=json.loads(output_str[start_idx:end_idx].replace('```json',""))
+    output_str=output_str[start_idx:]
+    if '</output_json>' in output_str:
+        
+        end_idx=output_str.index('</output_json>')
+        quizes_ls=json.loads(output_str[start_idx:end_idx].replace('```json',""))
+    elif '[' in output_str:
+        start_idx=output_str.index('[')
+        end_idx=output_str.rindex(']')+1
+        quizes_ls=json.loads(output_str[start_idx:end_idx])
+    else:
+        quizes_ls=[]
     return quizes_ls
 
 
 if __name__ == "__main__":
+    user_id="babe"
+    save_to="/workspace/mnt/"
+    init_user_storage(save_to, user_id)
     user_state = load_user_state(user_id)
     print("----"*10)
     print(type(user_state), user_state.keys())
@@ -284,12 +298,19 @@ if __name__ == "__main__":
     summary=active_chapter.sub_topics[0].sub_topic
     text_chunk=active_chapter.sub_topics[0].study_material
     quizes_ls= get_quiz(title, summary, text_chunk, "")
+    #quizzes_d_ls=quiz_output_parser(quizes_ls)
     print("\n"*3)
-    print(Fore.YELLOW + "\n Generated Quiz from SubTopics", '\n'.join([f"{subtopic.number}:{subtopic.sub_topic}" for subtopic in active_chapter.sub_topics]))
-    i=0
-    for quiz in quizes_ls:
-        print(f"------------------ quiz {str(i)} ------------------ ")
-        print(quiz)
-        print('\n'+ Fore.RESET)
+    print(type(quizes_ls),type(quizes_ls[0]), len(quizes_ls), quizes_ls)
+    #print(Fore.YELLOW + "\n Generated Quiz from SubTopics", '\n'.join([f"{subtopic.number}:{subtopic.sub_topic}" for subtopic in active_chapter.sub_topics]))
+    print("==="*10 , ">")
+    #print(type(quizzes_d_ls),type(quizzes_d_ls[0]), len(quizzes_d_ls), quizzes_d_ls)
+
+    """
+    updated_user: User = asyncio.run(add_quiz_to_subtopic(
+        user_id=user_id,
+        save_to=save_to,
+        subtopic_number=0,
+        quiz=quizzes_d_ls
+    ))"""
 
     
