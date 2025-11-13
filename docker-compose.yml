@@ -38,6 +38,7 @@ services:
     ports:
       - "7860:7860"  # Gradio UI
       - "2345:2345"
+      - "4101:4100"
     depends_on:
       - rag-server
       - ingestor-server
