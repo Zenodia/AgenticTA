@@ -8,7 +8,7 @@ from typing import List
 
 IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" #Replace this with the correct IP address
 RAG_SERVER_PORT = "8081"
-BASE_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
+RAG_BASE_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
 
 
 IPADDRESS = "ingestor-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" # Replace this with the correct IP address
@@ -143,7 +143,7 @@ async def document_search(payload, url):
     return flag, output
     
 async def get_documents(query):
-    url = f"{BASE_URL}/v1/search"
+    url = f"{RAG_BASE_URL}/v1/search"
     payload={
       "query": query , # replace with your own query 
       "reranker_top_k": 5,

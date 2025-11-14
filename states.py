@@ -70,6 +70,7 @@ class User(TypedDict):
     study_buddy_persona: Optional[str] = Field(description="the persona of a study_buddy")
     study_buddy_name: str = Field(description="name of the study_buddy")
     curriculum: Optional[List[Curriculum]]
+    uploaded_files: Optional[List[str]]  # list of file names uploaded by the user
 
 class GlobalState(TypedDict):
     input: str

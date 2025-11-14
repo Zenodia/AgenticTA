@@ -45,11 +45,12 @@ yaml_f=yaml.safe_load(f)
 global mnt_folder
 mnt_folder=yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
 
-
+start_fresh=False
 def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name):
     """Generate curriculum from uploaded PDF or use sample data"""
     global mnt_folder  
     pdf_loc = os.path.join(mnt_folder, "pdfs")
+    nemo_retriever_processed_pdf_files = os.listdir(pdf_loc)
     save_to = mnt_folder 
     print(Fore.BLUE + "generate_curriculum called with username =", username,"preference=",preference, Fore.RESET)
     _preference = preference if preference and preference.strip() else "someone who has patience, a good sense of humor, can make boring subject fun." 
@@ -60,6 +61,7 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
         "study_buddy_name": _study_buddy_name,
         "study_buddy_persona": None,
         "curriculum": None,
+        "uploaded_files": nemo_retriever_processed_pdf_files,
     }
     store_path, user_store_dir = init_user_storage(save_to, username)
     user_exist_flag=user_exists(username)
@@ -67,7 +69,7 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
     print(Fore.LIGHTBLUE_EX + f"store_path={store_path} for user_store_dir={user_store_dir}" , Fore.RESET)
     if user_exist_flag :    
         print("return user detected , loading existing state...", Fore.RESET)    
-        existing_user_state=load_user_state(user_id, save_to)
+        existing_user_state=load_user_state(username, save_to)
 
     else: 
         print(Fore.LIGHTYELLOW_EX + "New user detected, running first time setup..." , Fore.RESET)       
@@ -160,10 +162,9 @@ def handle_file_upload(files, username, progress=gr.Progress()):
             "description": "Reference name to the source pdf document"
         }
     ]
-    asyncio.run(delete_collections(username))
-    asyncio.run(delete_collections("metadata_schema"))
-    asyncio.run(delete_collections("meta"))
-
+    if start_fresh :
+        asyncio.run(delete_collections([username,"metadata_schema","meta"]))        
+        time.sleep(10)  # Make loading visible
     output_collection = asyncio.run(fetch_collections())
     print(type(output_collection), output_collection)
     if isinstance(output_collection, str):
@@ -174,15 +175,17 @@ def handle_file_upload(files, username, progress=gr.Progress()):
             print(Fore.YELLOW + f"Collection for user {username} already exists." , Fore.RESET)
         #delete_output=asyncio.run(delete_user_nemo_collection([username]))
         #print(Fore.YELLOW + f"Deleted existing collection for user {username}: {delete_output}" , Fore.RESET)
-    else:
-        print(Fore.YELLOW + f"creating new collection with collectio name = {username} already exists." , Fore.RESET)
-        # Call create collection method
-        asyncio.run(create_collection(
-            collection_name=username,
-            metadata_schema=metadata_schema # Optional argument, can be commented if metadata is not to be inserted
-        ))
-        print(Fore.BLUE + "Created collection for user:", collection_output, Fore.RESET)
+        else:
+            print(Fore.YELLOW + f"creating new collection with collectio name = {username}" , Fore.RESET)
+            # Call create collection method
+            asyncio.run(create_collection(
+                collection_name=username,
+                metadata_schema=metadata_schema # Optional argument, can be commented if metadata is not to be inserted
+            ))
+            time.sleep(10)
+            
     nemo_retriever_files_upload_output = asyncio.run(upload_files_to_nemo_retriever(pdf_dir , username,[]))
+    time.sleep(20)
     print(Fore.BLUE + "Copied files to pdf_dir =", '\n'.join(new_ls), Fore.RESET)
     print(Fore.BLUE + "\n nemo_retriever_files_upload_output =", nemo_retriever_files_upload_output, Fore.RESET)
     progress(0, desc="📤 Uploading files...")
