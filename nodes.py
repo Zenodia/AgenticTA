@@ -185,6 +185,7 @@ def _save_store(data: dict):
 
 
 def user_exists(user_id: str) -> bool:
+
     # First check per-user file store (created via save_user_to_file)
     user_file = USER_STORE_DIR / f"{user_id}.json"
     if user_file.exists():
@@ -845,7 +846,7 @@ async def populate_states_for_user(user: User, pdf_files_loc: str, study_buddy_p
     return gstate
 
 
-async def run_for_first_time_user(user: User, uploaded_pdf_loc: str, save_to: str, study_buddy_preference: str) -> GlobalState:
+async def run_for_first_time_user(user: User, uploaded_pdf_loc: str, save_to: str, study_buddy_preference: str , store_path : str = None, user_store_dir :str = None) -> GlobalState:
     """Main entrypoint: ensure user exists, call helper clients if necessary,
     populate states, and return the GlobalState.
     
@@ -865,7 +866,8 @@ async def run_for_first_time_user(user: User, uploaded_pdf_loc: str, save_to: st
     
     # Initialize per-user storage paths
     print(f"Initializing storage for user {user_id} at {save_to}...")
-    store_path, user_store_dir = init_user_storage(save_to, user_id)
+    if store_path is None and user_store_dir is None:
+        store_path, user_store_dir = init_user_storage(save_to, user_id)
     print(f"  - Global state path: {store_path}")
     print(f"  - User store directory: {user_store_dir}")
     

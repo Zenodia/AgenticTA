@@ -1,15 +1,83 @@
 """
 Study Buddy UI components and logic.
 """
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import from root-level modules
+parent_dir = Path(__file__).parent.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+import os, json, sys
 import gradio as gr
 import time
 import random
 from config import SAMPLE_CURRICULUM, SAMPLE_QUIZ_DATA, MAX_FILES, MAX_FILE_SIZE_GB, MAX_PAGES_PER_FILE
 from utils import validate_pdf_files
+import shutil
+import yaml
+import os
+from colorama import Fore
+from nemo_retriever_client_utils import delete_collections,fetch_collections, create_collection, upload_files_to_nemo_retriever, get_documents,fetch_rag_context
+from nodes import init_user_storage,user_exists,load_user_state,save_user_state, _save_store, _load_store
+from nodes import update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
+import asyncio
+from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic, printmd
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
+from typing import TypedDict, Annotated, Union
+from langchain_core.agents import AgentAction, AgentFinish
+from langchain_core.messages import BaseMessage
+import operator
+from typing import TypedDict, Annotated, List ,  Any
+from langchain_core.agents import AgentAction, AgentFinish
+from langchain_core.messages import BaseMessage
+import operator
+from markdown import Markdown
+import asyncio
+import random
+from colorama import Fore
+from enum import Enum
+from typing import Optional
+from pydantic import BaseModel, Field
+f=open("/workspace/docker-compose.yml","r")
+yaml_f=yaml.safe_load(f)
+global mnt_folder
+mnt_folder=yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
 
 
-def generate_curriculum(file_obj, validation_msg):
+def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name):
     """Generate curriculum from uploaded PDF or use sample data"""
+    global mnt_folder  
+    pdf_loc = os.path.join(mnt_folder, "pdfs")
+    save_to = mnt_folder 
+    print(Fore.BLUE + "generate_curriculum called with username =", username,"preference=",preference, Fore.RESET)
+    _preference = preference if preference and preference.strip() else "someone who has patience, a good sense of humor, can make boring subject fun." 
+    _study_buddy_name= study_buddy_name if study_buddy_name and study_buddy_name.strip() else "Ollie"
+    u: User = {
+        "user_id": username,
+        "study_buddy_preference": _preference,
+        "study_buddy_name": _study_buddy_name,
+        "study_buddy_persona": None,
+        "curriculum": None,
+    }
+    store_path, user_store_dir = init_user_storage(save_to, username)
+    user_exist_flag=user_exists(username)
+    print(Fore.LIGHTBLUE_EX + f"user_exist_flag={user_exist_flag} for username={username}" , Fore.RESET)
+    print(Fore.LIGHTBLUE_EX + f"store_path={store_path} for user_store_dir={user_store_dir}" , Fore.RESET)
+    if user_exist_flag :    
+        print("return user detected , loading existing state...", Fore.RESET)    
+        existing_user_state=load_user_state(user_id, save_to)
+
+    else: 
+        print(Fore.LIGHTYELLOW_EX + "New user detected, running first time setup..." , Fore.RESET)       
+        global_state: GlobalState = asyncio.run(run_for_first_time_user(u, pdf_loc, save_to, preference, store_path, user_store_dir))
+        user=global_state["user"]
+        study_plan=user["cirriculum"]["study_plan"].study_plan
+        chapters_ls=[f"{str(chatper.number)}:{chapter.name}" for chapter in study_plan]
+        curriculum = chapters_ls
+        save_user_state(user_id, updated_state)
+
     # Check if there's a validation error
     if validation_msg and validation_msg.startswith("❌"):
         # Return current state without changes if validation failed
@@ -23,7 +91,8 @@ def generate_curriculum(file_obj, validation_msg):
     if file_obj:
         # In a real app, you would extract content from PDF here
         # For demo, we'll just return sample curriculum
-        curriculum = [f"Chapter {i+1}: Extracted Topic {i+1}" for i in range(5)]
+        # curriculum = [f"Chapter {i+1}: Extracted Topic {i+1}" for i in range(5)]
+        curriculum = chapters_ls
     else:
         # Flatten the hierarchical curriculum structure
         curriculum = []
@@ -68,11 +137,54 @@ def generate_curriculum(file_obj, validation_msg):
     return outputs
 
 
-def handle_file_upload(files, progress=gr.Progress()):
+def handle_file_upload(files, username, progress=gr.Progress()):
     """Handle file upload and validate"""
     if files is None or len(files) == 0:
         return ""
     
+    global mnt_folder  
+
+    print(Fore.BLUE + "mnt_folder =", mnt_folder, "username=", username, Fore.RESET)
+    pdf_dir = os.path.join(mnt_folder, "pdfs")
+    user_name_folder=os.path.join(mnt_folder,username)
+    os.makedirs(pdf_dir, exist_ok=True)
+    os.makedirs(user_name_folder, exist_ok=True)
+    new_ls=[shutil.copy(f, pdf_dir) for f in files]
+    # Call create collection method
+    
+    # [Optional]: Define schema for metadata fields
+    metadata_schema = [    
+        {
+            "name": "source_ref",
+            "type": "string",
+            "description": "Reference name to the source pdf document"
+        }
+    ]
+    asyncio.run(delete_collections(username))
+    asyncio.run(delete_collections("metadata_schema"))
+    asyncio.run(delete_collections("meta"))
+
+    output_collection = asyncio.run(fetch_collections())
+    print(type(output_collection), output_collection)
+    if isinstance(output_collection, str):
+        output_collection = json.loads(output_collection)        
+        output_collection_ls = [c["collection_name"] for c in output_collection["collections"] if c["collection_name"]==username]
+        #print(Fore.YELLOW + f"output_collection_ls for user {username} =", output_collection_ls , Fore.RESET)
+        if len(output_collection_ls) > 0:
+            print(Fore.YELLOW + f"Collection for user {username} already exists." , Fore.RESET)
+        #delete_output=asyncio.run(delete_user_nemo_collection([username]))
+        #print(Fore.YELLOW + f"Deleted existing collection for user {username}: {delete_output}" , Fore.RESET)
+    else:
+        print(Fore.YELLOW + f"creating new collection with collectio name = {username} already exists." , Fore.RESET)
+        # Call create collection method
+        asyncio.run(create_collection(
+            collection_name=username,
+            metadata_schema=metadata_schema # Optional argument, can be commented if metadata is not to be inserted
+        ))
+        print(Fore.BLUE + "Created collection for user:", collection_output, Fore.RESET)
+    nemo_retriever_files_upload_output = asyncio.run(upload_files_to_nemo_retriever(pdf_dir , username,[]))
+    print(Fore.BLUE + "Copied files to pdf_dir =", '\n'.join(new_ls), Fore.RESET)
+    print(Fore.BLUE + "\n nemo_retriever_files_upload_output =", nemo_retriever_files_upload_output, Fore.RESET)
     progress(0, desc="📤 Uploading files...")
     time.sleep(0.8)  # Make loading visible
     

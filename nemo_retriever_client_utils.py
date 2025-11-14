@@ -4,9 +4,109 @@ import json
 import re
 import base64
 import random
+from typing import List
+
 IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" #Replace this with the correct IP address
 RAG_SERVER_PORT = "8081"
 BASE_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
+
+
+IPADDRESS = "ingestor-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" # Replace this with the correct IP address
+INGESTOR_SERVER_PORT = "8082"
+BASE_URL = f"http://{IPADDRESS}:{INGESTOR_SERVER_PORT}"  # Replace with your server URL
+
+async def delete_collections(collection_names: List[str] = ""):
+    url = f"{BASE_URL}/v1/collections"
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.delete(url, json=collection_names) as response:
+                await print_response(response)
+        except aiohttp.ClientError as e:
+            print(f"Error: {e}")
+
+
+async def create_collection(
+    collection_name: list = None,
+    embedding_dimension: int = 2048,
+    metadata_schema: list = []
+):
+
+    data = {
+        "collection_name": collection_name,
+        "embedding_dimension": embedding_dimension,
+        "metadata_schema": metadata_schema
+    }
+
+    HEADERS = {"Content-Type": "application/json"}
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(f"{BASE_URL}/v1/collection", json=data, headers=HEADERS) as response:
+                await print_response(response)
+        except aiohttp.ClientError as e:
+            return 500, {"error": str(e)}
+
+
+# [Optional]: Define schema for metadata fields
+metadata_schema = [    
+    {
+        "name": "source_ref",
+        "type": "string",
+        "description": "Reference name to the source pdf document"
+    }
+]
+
+async def upload_documents(collection_name: str = "", files_path_ls:list[str] = [], custom_metadata: list[dict] = []):
+    
+    print("Uploading files:", files_path_ls , "\n to collection:", collection_name , "\n in nemo retriever...   ")
+    data = {
+        "collection_name": collection_name,
+        "blocking": False, # If True, upload is blocking; else async. Status API not needed when blocking
+        "split_options": {
+            "chunk_size": 512,
+            "chunk_overlap": 150
+        },
+        "custom_metadata": custom_metadata,
+        "generate_summary": True # Set to True to optionally generate summaries for all documents after ingestion
+    }
+
+    form_data = aiohttp.FormData()
+    for file_path in files_path_ls:
+        form_data.add_field("documents", open(file_path, "rb"), filename=os.path.basename(file_path), content_type="application/pdf")
+
+    form_data.add_field("data", json.dumps(data), content_type="application/json")
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(f"{BASE_URL}/v1/documents", data=form_data) as response: # Replace with session.patch for reingesting
+                await print_response(response)
+        except aiohttp.ClientError as e:
+            print(f"Error: {e}")
+
+async def fetch_collections():
+    url = f"{BASE_URL}/v1/collections"
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url) as response:
+                output = await print_response(response)
+                output = json.dumps(output, indent=2)
+                json_output = json.loads(output)
+        except aiohttp.ClientError as e:
+            json_output = {}
+            print(f"Error: {e}")
+        return json_output
+
+
+
+
+async def upload_files_to_nemo_retriever(files_loc_path : str , username: str , CUSTOM_METADATA: list[dict] = []): 
+        # Filepaths
+    files_path_ls = [os.path.join(files_loc_path, f) for f in os.listdir(files_loc_path) if f.endswith('.pdf')]
+    # [Optional]: Add filename specific custom metadata
+
+    output=await upload_documents(username, files_path_ls, CUSTOM_METADATA)
+    return output
+
 
 async def print_response(response):
     """Helper to print API response."""

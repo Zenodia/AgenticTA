@@ -6,7 +6,13 @@ import os
 import random
 from colorama import Fore
 from utils import get_question, get_answer, get_citation_as_explain, get_choices
-
+import yaml
+import os
+from colorama import Fore
+f=open("/workspace/docker-compose.yml","r")
+yaml_f=yaml.safe_load(f)
+global mnt_folder
+mnt_folder=yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
 # Global variables to track state
 current_question = 0
 user_answers = []
@@ -14,24 +20,35 @@ quiz_data = []
 df = None
 
 
-def load_quiz_data():
+def load_quiz_data(mnt_folder=mnt_folder):
     """Load quiz data from CSV files"""
     global df, quiz_data
-    csv_dir = './sample_data'
-    files = [f for f in os.listdir(csv_dir) if f.endswith('.csv') and not f.startswith("summary_")]
-    f = random.choice(files)
-    df = pd.read_csv(os.path.join(csv_dir, f))
-    df = df.sample(n=2, replace=True)
-    n = len(df)
-    quiz_data = []
-    for i in range(n):
+    csv_dir = os.path.join(mnt_folder, "csvs")
+    os.makedirs(csv_dir, exist_ok=True)
+    try :
+        files = [f for f in os.listdir(csv_dir) if f.endswith('.csv') and not f.startswith("summary_")]
+        f = random.choice(files)
+        df = pd.read_csv(os.path.join(csv_dir, f))
+        df = df.sample(n=2, replace=True)
+        n = len(df)
+        quiz_data = []
+        for i in range(n):
+            item = {
+                "question": get_question(i, df),
+                "choices": get_choices(i, df),
+                "answer": get_answer(i, df),
+                "explanation": get_citation_as_explain(i, df)
+            }
+            quiz_data.append(item)
+    except Exception as e:
+        #print(Fore.RED + "Error loading quiz data:", str(e), Fore.RESET)
         item = {
-            "question": get_question(i, df),
-            "choices": get_choices(i, df),
-            "answer": get_answer(i, df),
-            "explanation": get_citation_as_explain(i, df)
-        }
-        quiz_data.append(item)
+                "question": "Sample Question: What is the capital of France?",
+                "choices": ["(A) Berlin", "(B) Madrid", "(C) Paris", "(D) Rome"],
+                "answer": "(C)",
+                "explanation": "The capital of France is Paris."
+            }
+        quiz_data = [item]
 
 
 def init_quiz():

@@ -9,7 +9,8 @@ from study_buddy_ui import (
     clear_feedback, check_quiz_unlock, submit_username
 )
 from quiz_ui import init_quiz, record_answer, next_question, previous_question, submit_quiz
-
+from colorama import Fore
+import os, sys, json
 # Custom CSS
 CUSTOM_CSS = """
 .chapter-btn {
@@ -189,7 +190,7 @@ def create_app():
         
         # Username state and components
         username_state = gr.State("")
-        
+        print(Fore.CYAN + "Initialized username_state" , username_state, Fore.RESET)
         # Username modal popup (overlay)
         username_modal = gr.Column(visible=True, elem_classes=["username-modal"])
         with username_modal:
@@ -322,14 +323,14 @@ def create_app():
             # Validate files on upload
             file_upload.change(
                 handle_file_upload,
-                inputs=[file_upload],
+                inputs=[file_upload, username_state],
                 outputs=[validation_status]
             )
             
             generate_outputs = [curriculum_col] + chapter_buttons + [unlocked_topics_state, expanded_topics_state, completed_topics_state]
             generate_btn.click(
                 generate_curriculum,
-                inputs=[file_upload, validation_status],
+                inputs=[file_upload, validation_status, username_state, buddy_pref],
                 outputs=generate_outputs
             )
             
