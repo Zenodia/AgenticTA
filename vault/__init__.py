@@ -64,20 +64,139 @@ def log_vault_status():
     print()
 
 
+# ============================================================================
+# Simple Public API (works just like os.getenv!)
+# ============================================================================
+
+def get_secret(key: str, default=None, required=True):
+    """
+    Get a secret value - works just like os.getenv() but with vault support.
+    
+    Automatically handles:
+    - Vault connection (if VAULT_TOKEN is set)
+    - Fallback to environment variables (even for unknown keys)
+    - Caching for performance
+    
+    Args:
+        key: Secret name (e.g., 'NVIDIA_API_KEY', 'ANTHROPIC_API_KEY', etc.)
+        default: Default value if secret not found (implies required=False)
+        required: Raise error if secret not found (default: True)
+        
+    Returns:
+        Secret value or default
+        
+    Raises:
+        ValueError: If required=True and secret not found
+        
+    Examples:
+        >>> from vault import get_secret
+        >>> # Required by default (raises if missing)
+        >>> api_key = get_secret('NVIDIA_API_KEY')
+        >>> 
+        >>> # Works with any key (checks env vars automatically)
+        >>> anthropic = get_secret('ANTHROPIC_API_KEY')
+        >>> 
+        >>> # Optional with default (implies required=False)
+        >>> token = get_secret('HF_TOKEN', default='')
+        >>> 
+        >>> # Explicitly optional (no error if missing)
+        >>> optional = get_secret('OPTIONAL_KEY', required=False)
+    """
+    # If default is provided, implicitly make it optional (unless explicitly required)
+    if default is not None and required is True:
+        required = False
+    
+    # Try to get from SecretsConfig (vault or predefined env vars)
+    config = get_secrets_config()
+    value = config.get(key)
+    
+    # If not found and no vault, try os.getenv as fallback for unknown keys
+    if value is None:
+        value = os.getenv(key)
+    
+    # Use default if still not found
+    if value is None:
+        value = default
+    
+    if required and value is None:
+        raise ValueError(f"Required secret '{key}' not found in Vault or environment")
+    
+    return value
+
+
+def require_secret(key: str):
+    """
+    Get a required secret - raises error if not found.
+    
+    Args:
+        key: Secret name
+        
+    Returns:
+        Secret value (never None)
+        
+    Raises:
+        ValueError: If secret not found
+        
+    Example:
+        >>> from vault import require_secret
+        >>> api_key = require_secret('NVIDIA_API_KEY')
+    """
+    return get_secret(key, required=True)
+
+
+def has_secret(key: str) -> bool:
+    """
+    Check if a secret exists.
+    
+    Args:
+        key: Secret name
+        
+    Returns:
+        True if secret exists, False otherwise
+        
+    Example:
+        >>> from vault import has_secret
+        >>> if has_secret('DATADOG_TOKEN'):
+        ...     setup_datadog()
+    """
+    return get_secret(key) is not None
+
+
+def get_all_secrets() -> dict:
+    """
+    Get all configured secrets as a dictionary.
+    
+    Returns:
+        Dictionary of all secrets (excluding None values)
+        
+    Example:
+        >>> from vault import get_all_secrets
+        >>> secrets = get_all_secrets()
+        >>> print(secrets.keys())
+    """
+    config = get_secrets_config()
+    return config.get_all()
+
+
 __all__ = [
-    # Client
+    # Simple API (recommended for users)
+    'get_secret',
+    'require_secret',
+    'has_secret',
+    'get_all_secrets',
+    # Client (advanced usage)
     'VaultClient',
     'get_vault_client',
     'get_secret_with_fallback',
-    # Config
+    # Config (advanced usage)
     'SecretsConfig',
     'get_secrets_config',
-    # Convenience functions
+    # Convenience functions (legacy)
     'get_nvidia_api_key',
     'get_hf_token',
     'get_astra_token',
     'get_datadog_embedding_token',
-    # Token Management
+    # Token Management (production)
     'TokenManager',
     'get_token_manager',
     'start_token_manager',

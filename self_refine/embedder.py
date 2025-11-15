@@ -7,11 +7,11 @@ Supports:
 - BGE-small (BAAI/bge-small-en)
 """
 
-import os
 import logging
 import numpy as np
 from typing import List, Union, Optional
 import asyncio
+from vault import get_secret
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class Embedder:
         # Initialize model based on selection
         if self.model_name == "openai":
             # Try to use OpenAI, fall back to HuggingFace if no API key
-            openai_key = os.environ.get("OPENAI_API_KEY")
+            openai_key = get_secret("OPENAI_API_KEY", required=False)
             if openai_key:
                 try:
                     import openai
@@ -52,7 +52,7 @@ class Embedder:
                     logger.warning("OpenAI package not installed. Falling back to MiniLM.")
                     self.model_name = "miniLM"
             else:
-                logger.warning("OpenAI API key not found. Falling back to MiniLM.")
+                logger.warning("OPENAI_API_KEY not found. Falling back to MiniLM.")
                 self.model_name = "miniLM"
         
         # If using a HuggingFace model (either by choice or fallback)
