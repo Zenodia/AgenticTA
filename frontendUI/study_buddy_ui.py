@@ -69,17 +69,27 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
     print(Fore.LIGHTBLUE_EX + f"store_path={store_path} for user_store_dir={user_store_dir}" , Fore.RESET)
     if user_exist_flag :    
         print("return user detected , loading existing state...", Fore.RESET)    
-        existing_user_state=load_user_state(username, save_to)
-
+        u=load_user_state(username)
+        study_plan =u["curriculum"][0]["study_plan"]
+        print(type(study_plan), study_plan)
+        if isinstance(study_plan, StudyPlan):
+            chapters_ls=[f"{str(chapter.number)}:{chapter.name}" for chapter in study_plan.study_plan]
+            curriculum = chapters_ls
+        else:
+            print(type(study_plan), study_plan)
     else: 
         print(Fore.LIGHTYELLOW_EX + "New user detected, running first time setup..." , Fore.RESET)       
         global_state: GlobalState = asyncio.run(run_for_first_time_user(u, pdf_loc, save_to, preference, store_path, user_store_dir))
-        user=global_state["user"]
-        study_plan=user["cirriculum"]["study_plan"].study_plan
-        chapters_ls=[f"{str(chatper.number)}:{chapter.name}" for chapter in study_plan]
-        curriculum = chapters_ls
-        save_user_state(user_id, updated_state)
-
+        u=load_user_state(username)
+        study_plan =u["curriculum"][0]["study_plan"]
+        print(type(study_plan), study_plan)
+        if isinstance(study_plan, StudyPlan):
+            chapters_ls=[f"{str(chapter.number)}:{chapter.name}" for chapter in study_plan.study_plan]
+            curriculum = chapters_ls
+        else:
+            print(type(study_plan), study_plan)
+        
+    print(Fore.BLUE + "Generated curriculum:", chapters_ls, Fore.RESET)
     # Check if there's a validation error
     if validation_msg and validation_msg.startswith("❌"):
         # Return current state without changes if validation failed
@@ -89,35 +99,73 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
         outputs.append([])  # Empty unlocked topics
         outputs.append([])  # Empty expanded topics
         return outputs
-    
-    if file_obj:
-        # In a real app, you would extract content from PDF here
-        # For demo, we'll just return sample curriculum
-        # curriculum = [f"Chapter {i+1}: Extracted Topic {i+1}" for i in range(5)]
-        curriculum = chapters_ls
-    else:
-        # Flatten the hierarchical curriculum structure
-        curriculum = []
-        for item in SAMPLE_CURRICULUM:
-            if isinstance(item, dict):
-                # Add main topic
-                curriculum.append(item["topic"])
-                # Add subtopics with indentation (max 10 subtopics)
-                subtopics_to_add = item["subtopics"][:10]  # Limit to 10 subtopics
-                for subtopic in subtopics_to_add:
-                    curriculum.append(f"  ↳ {subtopic}")
-            else:
-                # Add regular topic
-                curriculum.append(item)
-    
+    active_chapter=u["curriculum"][0]["active_chapter"]
+    print(type(active_chapter), active_chapter)
+
+    sub_topics=[f"{str(subtopic.number)}:{subtopic.sub_topic}" for subtopic in active_chapter.sub_topics]
+    response = f"""
+            ### Chapter {str(active_chapter.number)}: {active_chapter.name}
+
+            #### 1st Study Topic: {active_chapter.sub_topics[0].sub_topic}
+
+            **Study Material:**
+
+            {active_chapter.sub_topics[0].study_material}"""
+    i=0
+    curriculum_formatted=[]
+    for chapter in chapters_ls:
+        if i==0:
+            temp={"topic": chapter,
+             "subtopics": sub_topics
+            }
+            curriculum_formatted.append(temp)
+        else:
+            curriculum_formatted.append(chapter)
+
+    """
+    SAMPLE_CURRICULUM = [
+    {
+        "topic": "Introduction to Biology",
+        "subtopics": [
+            "Introduction to Biology - Cell Biology",
+            "Introduction to Biology - Genetics",
+            "Introduction to Biology - Ecology",
+            "Introduction to Biology - Evolution",
+            "Introduction to Biology - Human Anatomy"
+        ]  # Max 10 subtopics allowed
+    },
+    "Cell Structure and Function",
+    "Genetics and Heredity",
+    "Evolution and Natural Selection",
+    "Ecology and Ecosystems"
+    ]"""
+
+
+    # In a real app, you would extract content from PDF here
+    # For demo, we'll just return sample curriculum
+    # curriculum = [f"Chapter {i+1}: Extracted Topic {i+1}" for i in range(5)]
+    # Flatten the hierarchical curriculum structure
+    _curriculum = []
+    for item in curriculum_formatted:
+        if isinstance(item, dict):
+            # Add main topic
+            _curriculum.append(item["topic"])
+            # Add subtopics with indentation (max 10 subtopics)
+            subtopics_to_add = item["subtopics"][:10]  # Limit to 10 subtopics
+            for subtopic in subtopics_to_add:
+                _curriculum.append(f"  ↳ {subtopic}")
+        else:
+            # Add regular topic
+            _curriculum.append(item)
+
     # Initialize unlocked topics - only first subtopic under each main topic is unlocked
     unlocked_topics = set()
-    for i, topic in enumerate(curriculum):
+    for i, topic in enumerate(_curriculum):
         # Main topics and non-subtopic items are always unlocked
         if not topic.startswith("  ↳ "):
             unlocked_topics.add(topic)
         # First subtopic after a main topic is unlocked
-        elif i > 0 and not curriculum[i-1].startswith("  ↳ "):
+        elif i > 0 and not _curriculum[i-1].startswith("  ↳ "):
             unlocked_topics.add(topic)
     
     # Create chapter buttons (10 max) - hide subtopics initially
