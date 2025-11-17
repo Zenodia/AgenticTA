@@ -2,7 +2,6 @@
 Utility functions for the Study Assistant application.
 """
 import os
-import pandas as pd
 import re
 from colorama import Fore
 from config import MAX_FILES, MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_GB, MAX_PAGES_PER_FILE
@@ -52,50 +51,59 @@ def validate_pdf_files(files):
     return True, f"✅ {len(files)} file(s) uploaded successfully!"
 
 
+# Even more robust approach:
+def extract_choices_robust(choice_str):
+    # First, try to separate concatenated choices
+    # Look for patterns like ')''(' and insert space
+    separated = re.sub(r"\)'\s*'\s*\(", ")' '(", choice_str)
+    
+    # Clean the string
+    cleaned = re.sub(r"[\[\]'\"\\]", " ", separated)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    
+    # Extract all choices - more flexible pattern
+    pattern = r"\([A-E]\)[^(\]]*?(?=\s*\([A-E]\)|\s*$)"
+    matches = re.findall(pattern, cleaned)
+    
+    result = [match.strip() for match in matches if match.strip()]
+    return result
+
 def double_check(choice):
-    """Helper function to validate choice format"""
     print(choice)
     if '(A)' in choice and '(B)' in choice and '(C)' in choice and '(D)' in choice and '(E)' in choice:
         print("A-E")
-        choices = get_choices(choice)
-    elif '(A)' in choice and '(B)' in choice and '(C)' in choice and '(D)' in choice:
+        choices=get_choices(choice)
+    elif '(A)' in choice and '(B)' in choice and '(C)' in choice and '(D)' in choice :
         print("A-D")
-        choices = get_choices(choice)
-    elif '(A)' in choice and '(B)' in choice and '(C)' in choice:
+        choices=get_choices(choice)
+    elif '(A)' in choice and '(B)' in choice and '(C)' in choice :
         print("A-C")
-        choices = get_choices(choice)
+        choices=get_choices(choice)
     elif '(A)' in choice and '(B)' in choice:
         print("A-B")
-        choices = get_choices(choice)
-    elif '(A)' in choice:
+        choices=get_choices(choice)
+    elif '(A)' in choice :
         print("just A")
-        choices = choice
-    elif '(B)' in choice:
+        choices=choice
+    elif '(B)' in choice :
         print("just B")
-        choices = choice
-    elif '(C)' in choice:
+        choices=choice
+    elif '(C)' in choice :
         print("just C")
-        choices = choice
-    elif '(D)' in choice:
+        choices=choice
+    elif '(D)' in choice :
         print("just D")
-        choices = choice
-    elif '(E)' in choice:
+        choices=choice
+    elif '(E)' in choice :     
         print("just E")
-        choices = choice
+        choices=choice
     else:
-        print(Fore.RED + "error=\n", choice)
+        print(Fore.RED+"error=\n",choice)
     return choices
 
-
-def get_choices(row_nr=None, df=None, choice_str=None):
-    """
-    Extract choices from a DataFrame row or choice string.
-    Can be called with either (row_nr, df) or just choice_str.
-    """
-    if choice_str is None and row_nr is not None and df is not None:
-        choice_str = df.iloc[row_nr, 5]
-    
-    choice_text = str(choice_str).replace('[', '').replace(']', '').replace("'", "").replace('"', '').strip()
+def get_choices(quiz_d):    
+    choice_str=quiz_d["choices"]
+    choice_text = str(choice_str).replace('[','').replace(']','').replace("'","").replace('"','').strip()
     lines = [line.strip() for line in choice_text.split('\n') if line.strip()]
     
     all_choices = []
@@ -119,45 +127,53 @@ def get_choices(row_nr=None, df=None, choice_str=None):
         matches = re.findall(pattern, cleaned)
         
         result = [match.strip() for match in matches if match.strip()]
+        #print(Fore.CYAN + "result list ", len(result), result , Fore.RESET)
         final_result = [double_check(item) for item in result]
         
         if isinstance(final_result, list):
             all_choices.extend([ch.strip() for ch in final_result if ch.strip()])
         else:
             all_choices.append(str(final_result).strip())
-    
-    if len(all_choices) < 4:
-        print(Fore.RED + "extracted=", '\n', len(all_choices), all_choices, Fore.RESET)
+    if len(all_choices)<4 :
+        print(Fore.RED + "extracted=", '\n', len(all_choices), all_choices , Fore.RESET)
     
     return all_choices
 
-
-def get_question(row_nr, df):
+def get_question(quiz_d):
     """
-    Extract question from a pandas DataFrame row.
+    quiz_d: individual quiz item in dict
+    return the question as string
     """
-    question = df.iloc[row_nr, 3].replace('[', '').replace(']', '').replace("'", "")
+    question_str=quiz_d["question"]
+    question=question_str.replace('[','').replace(']','').replace("'","")
     return question
 
 
-def get_answer(row_nr, df):
+def get_answer(quiz_d):
     """
-    Extract answer from a pandas DataFrame row.
+    quiz_d: individual quiz item in dict
+    return the answer as string
     """
-    answer = df.iloc[row_nr, 4].replace('[', '').replace(']', '').replace("'", "")
-    answer_to_index = {"A": '(A)', "B": '(B)', "C": '(C)', "D": '(D)', "E": '(E)'}
+    answer_str=quiz_d["answer"]
+    answer=answer_str.replace('[','').replace(']','').replace("'","")
+    answer_to_index={"A":'(A)',"B": '(B)',"C":'(C)',"D":'(D)',"E":'(E)'}
     if answer in answer_to_index.keys():
-        answer_idx = answer_to_index[answer]
+        answer_idx=answer_to_index[answer]
     else:
-        print(answer, "not in answer to index")
-    
+        print(answer , "not in answer to index")
+        
     return answer_idx
 
-
-def get_citation_as_explain(row_nr, df):
+def get_citation_as_explain(quiz_d):
     """
-    Extract citation/explanation from a pandas DataFrame row.
+    quiz_d: individual quiz item in dict
+    return the citation to the original document as the explanation of the answer 
     """
-    explanation = df.iloc[row_nr, -1].replace('[', '').replace(']', '').replace("'", "")
-    return explanation
-
+    citation_ls=quiz_d["citations"]
+    if isinstance(citation_ls,list):
+        citation_str='\n'.join(citation_ls)
+    else:
+        citation_str=citation_ls
+    though_process=quiz_d["thought_process"]
+    explaination=f"reference to source:{citation_str} and thought_process:{though_process}" 
+    return explaination

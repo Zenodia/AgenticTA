@@ -4,13 +4,44 @@ Main application file combining Study Buddy and Quiz tabs.
 import gradio as gr
 from config import MAX_FILES, MAX_FILE_SIZE_GB, MAX_PAGES_PER_FILE
 from study_buddy_ui import (
-    generate_curriculum, handle_file_upload, mark_chapter_complete,
-    check_answers, go_to_next_chapter, send_message, submit_feedback,
+    generate_curriculum, handle_file_upload, mark_topic_complete,
+    check_answers, send_message, submit_feedback,
     clear_feedback, check_quiz_unlock, submit_username
 )
 from quiz_ui import init_quiz, record_answer, next_question, previous_question, submit_quiz
 from colorama import Fore
 import os, sys, json
+
+def check_and_init_quiz(completed_topics, username):
+    """Check if quiz should be unlocked and initialize it if so"""
+    import gradio as gr
+    
+    # Check if quiz should be unlocked
+    lock_msg_update, quiz_col_update = check_quiz_unlock(completed_topics, username)
+    
+    # Determine if quiz is unlocked by checking if any SUBTOPIC is completed
+    # (subtopics have "↳" prefix)
+    is_quiz_unlocked = False
+    if completed_topics:
+        for completed in completed_topics:
+            if completed.strip().startswith("↳") or "  ↳" in completed:
+                is_quiz_unlocked = True
+                break
+    
+    # If quiz is now unlocked (visible), initialize it
+    if is_quiz_unlocked and username:
+        try:
+            quiz_init_outputs = init_quiz(username)
+            return (lock_msg_update, quiz_col_update) + quiz_init_outputs
+        except Exception as e:
+            print(Fore.RED + f"Error initializing quiz: {e}", Fore.RESET)
+            # Return empty/default values if initialization fails
+            return (lock_msg_update, quiz_col_update, "", "", gr.Radio(choices=[]), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False))
+    else:
+        # Quiz is still locked, return default empty values
+        return (lock_msg_update, quiz_col_update, "", "", gr.Radio(choices=[]), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False))
+import yaml
+
 # Custom CSS
 CUSTOM_CSS = """
 .chapter-btn {
@@ -182,7 +213,10 @@ button:disabled {
     pointer-events: auto !important;
 }
 """
-
+f=open("/workspace/docker-compose.yml","r")
+yaml_f=yaml.safe_load(f)
+global mnt_folder
+mnt_folder=yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
 
 def create_app():
     """Create and configure the Gradio application"""
@@ -257,9 +291,21 @@ def create_app():
                     with curriculum_col:
                         gr.Markdown("## Study Curriculum")
                         chapter_buttons = []
+                        chapter_checkboxes = []
                         for i in range(10):  # Max 10 chapters
-                            btn = gr.Button(visible=False, elem_classes=["chapter-btn"])
-                            chapter_buttons.append(btn)
+                            with gr.Row():
+                                checkbox = gr.Checkbox(visible=False, label="", scale=1, elem_classes=["chapter-checkbox"])
+                                btn = gr.Button(visible=False, elem_classes=["chapter-btn"], scale=9)
+                                chapter_checkboxes.append(checkbox)
+                                chapter_buttons.append(btn)
+                    
+                    # Study Material section - shows current subtopic material
+                    study_material_section = gr.Accordion("📚 Current Study Material", open=True, visible=False)
+                    with study_material_section:
+                        study_material_display = gr.Markdown(
+                            value="Study material will appear here after generating curriculum.",
+                            elem_classes=["study-material"]
+                        )
                     
                     # Quiz section
                     quiz_accordion = gr.Accordion("Quiz", visible=False)
@@ -327,45 +373,45 @@ def create_app():
                 outputs=[validation_status]
             )
             
-            generate_outputs = [curriculum_col] + chapter_buttons + [unlocked_topics_state, expanded_topics_state, completed_topics_state]
+            generate_outputs = [curriculum_col] + chapter_checkboxes + chapter_buttons + [study_material_section, study_material_display, unlocked_topics_state, expanded_topics_state, completed_topics_state]
             generate_btn.click(
                 generate_curriculum,
                 inputs=[file_upload, validation_status, username_state, buddy_pref],
                 outputs=generate_outputs
             )
             
-            # Connect chapter buttons
-            mark_outputs = [
-                quiz_accordion,
-                score_counter,
-                current_chapter,
-                total_questions_state
-            ] + quiz_components + chapter_buttons + [expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn]
+            # Buttons are now non-clickable (interactive=False), so no click handlers needed
             
-            for btn in chapter_buttons:
-                btn.click(
-                    mark_chapter_complete,
-                    inputs=[btn, expanded_topics_state, unlocked_topics_state, completed_topics_state],
-                    outputs=mark_outputs
+            # Connect checkboxes for marking completion
+            # Outputs: checkboxes + buttons + quiz accordion + quiz components + states + submit button
+            checkbox_outputs = (chapter_checkboxes + chapter_buttons + 
+                              [quiz_accordion, score_counter, current_chapter, total_questions_state] +
+                              quiz_components + 
+                              [unlocked_topics_state, completed_topics_state, submit_btn, next_chapter_btn])
+            
+            # Helper function to create checkbox handler with correct index
+            def make_checkbox_handler(idx):
+                def handler(checkbox_value, unlocked, expanded, completed, username, *buttons):
+                    return mark_topic_complete(checkbox_value, idx, unlocked, expanded, completed, username, *buttons)
+                return handler
+            
+            for i, checkbox in enumerate(chapter_checkboxes):
+                checkbox.change(
+                    make_checkbox_handler(i),
+                    inputs=[checkbox, unlocked_topics_state, expanded_topics_state, completed_topics_state, username_state] + chapter_buttons,
+                    outputs=checkbox_outputs
                 )
             
             # Submit answers
-            submit_inputs = [current_chapter, total_questions_state, unlocked_topics_state, expanded_topics_state, completed_topics_state] + quiz_components[::2]
-            submit_outputs = [score_counter] + quiz_components[1::2] + chapter_buttons + [unlocked_topics_state, expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn]
+            submit_inputs = [current_chapter, total_questions_state, unlocked_topics_state, expanded_topics_state, completed_topics_state, username_state] + quiz_components[::2]
+            submit_outputs = [score_counter] + quiz_components[1::2] + chapter_checkboxes + chapter_buttons + [unlocked_topics_state, expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn]
             submit_btn.click(
                 check_answers,
                 inputs=submit_inputs,
                 outputs=submit_outputs
             )
             
-            # Next Chapter button
-            next_chapter_inputs = [current_chapter, unlocked_topics_state, expanded_topics_state, completed_topics_state]
-            next_chapter_outputs = mark_outputs
-            next_chapter_btn.click(
-                go_to_next_chapter,
-                inputs=next_chapter_inputs,
-                outputs=next_chapter_outputs
-            )
+            # Next Chapter button - removed since users now manually check boxes to complete topics
             
             # Chat functionality
             msg.submit(send_message, [msg, chatbot, buddy_pref], [msg, chatbot])
@@ -423,7 +469,8 @@ def create_app():
                 prev_btn.click(previous_question, None, [progress, question_display, choices, prev_btn, next_btn, submit_btn_quiz])
                 submit_btn_quiz.click(submit_quiz, None, [result_display, result_display, progress, question_display, choices, submit_btn_quiz])
                 
-                demo.load(init_quiz, None, [progress, question_display, choices, prev_btn, next_btn, submit_btn_quiz])
+                # Initialize quiz when user accesses the quiz tab (after curriculum is generated)
+                # Removed demo.load to avoid initialization errors for first-time users
         
         # Username submission event handler
         username_submit_btn.click(
@@ -439,11 +486,11 @@ def create_app():
             outputs=[username_modal, username_display, username_state]
         )
         
-        # Update Quiz tab visibility when completed_topics changes
+        # Update Quiz tab visibility when completed_topics changes and initialize quiz if unlocked
         completed_topics_state.change(
-            check_quiz_unlock,
-            inputs=[completed_topics_state],
-            outputs=[quiz_lock_message, quiz_content_col]
+            check_and_init_quiz,
+            inputs=[completed_topics_state, username_state],
+            outputs=[quiz_lock_message, quiz_content_col, progress, question_display, choices, prev_btn, next_btn, submit_btn_quiz]
         )
     
     demo.css = CUSTOM_CSS
