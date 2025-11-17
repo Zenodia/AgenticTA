@@ -744,21 +744,60 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
 # Note: go_to_next_chapter removed - users now manually check boxes to mark completion
 
 
-def send_message(message, history, buddy_pref):
-    """Handle chat messages with study buddy"""
+def send_message(message, history, buddy_pref, username):
+    """Handle chat messages with study buddy using AI-powered responses"""
     if not message.strip():
         return "", history
     
-    # Simple response logic based on user preference
-    responses = [
-        f"I understand you prefer a {buddy_pref.lower() if buddy_pref else 'helpful'} study buddy!",
-        "That's a great point! Let me help clarify that concept.",
-        "I found some additional resources on that topic for you.",
-        "Would you like me to explain that in a different way?",
-        "That's an excellent question! Here's what I know about it..."
-    ]
+    # Load user state to get current context
+    try:
+        user_state = load_user_state(username)
+        if not user_state or "curriculum" not in user_state or len(user_state["curriculum"]) == 0:
+            # Fallback to simple response if user state not available
+            bot_response = "I'm having trouble loading your study context. Please make sure you've generated a curriculum first."
+        else:
+            # Extract context from user state
+            curriculum = user_state["curriculum"][0]
+            active_chapter = curriculum.get("active_chapter")
+            
+            if not active_chapter:
+                bot_response = "Please select a chapter to start studying first!"
+            else:
+                # Get chapter details
+                chapter_name = active_chapter.get("name", "Unknown Chapter") if isinstance(active_chapter, dict) else active_chapter.name
+                
+                # Get first subtopic (or could be modified to track current subtopic)
+                sub_topics = active_chapter.get("sub_topics", []) if isinstance(active_chapter, dict) else active_chapter.sub_topics
+                
+                if not sub_topics or len(sub_topics) == 0:
+                    sub_topic = "General"
+                    study_material = "No study material available yet."
+                    list_of_quizzes = []
+                else:
+                    # Get first subtopic details (could be extended to track current active subtopic)
+                    first_subtopic = sub_topics[0]
+                    sub_topic = first_subtopic.get("sub_topic", "Unknown") if isinstance(first_subtopic, dict) else first_subtopic.sub_topic
+                    study_material = first_subtopic.get("study_material", "No material available.") if isinstance(first_subtopic, dict) else first_subtopic.study_material
+                    list_of_quizzes = first_subtopic.get("quizzes", []) if isinstance(first_subtopic, dict) else first_subtopic.quizzes
+                
+                # Get study buddy preference
+                user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
+                
+                # Call the study buddy response function
+                from standalone_study_buddy_response import study_buddy_response
+                bot_response = study_buddy_response(
+                    chapter_name=chapter_name,
+                    sub_topic=sub_topic,
+                    study_material=study_material,
+                    list_of_quizzes=list_of_quizzes,
+                    user_input=message,
+                    study_buddy_name="Study Buddy",
+                    user_preference=user_preference
+                )
+    except Exception as e:
+        print(Fore.RED + f"Error in send_message: {e}", Fore.RESET)
+        bot_response = "I encountered an error while processing your message. Please try again."
     
-    bot_response = random.choice(responses)
     history.append({"role": "user", "content": message})
     history.append({"role": "assistant", "content": bot_response})
     return "", history

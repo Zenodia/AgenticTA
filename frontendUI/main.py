@@ -414,8 +414,8 @@ def create_app():
             # Next Chapter button - removed since users now manually check boxes to complete topics
             
             # Chat functionality
-            msg.submit(send_message, [msg, chatbot, buddy_pref], [msg, chatbot])
-            send_btn.click(send_message, [msg, chatbot, buddy_pref], [msg, chatbot])
+            msg.submit(send_message, [msg, chatbot, buddy_pref, username_state], [msg, chatbot])
+            send_btn.click(send_message, [msg, chatbot, buddy_pref, username_state], [msg, chatbot])
             
             # Feedback functionality
             feedback_submit_btn.click(
