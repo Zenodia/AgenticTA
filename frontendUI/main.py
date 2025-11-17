@@ -4,8 +4,8 @@ Main application file combining Study Buddy and Quiz tabs.
 import gradio as gr
 from config import MAX_FILES, MAX_FILE_SIZE_GB, MAX_PAGES_PER_FILE
 from study_buddy_ui import (
-    generate_curriculum, handle_file_upload, mark_chapter_complete,
-    check_answers, go_to_next_chapter, send_message, submit_feedback,
+    generate_curriculum, handle_file_upload, mark_topic_complete,
+    check_answers, send_message, submit_feedback,
     clear_feedback, check_quiz_unlock, submit_username
 )
 from quiz_ui import init_quiz, record_answer, next_question, previous_question, submit_quiz
@@ -19,9 +19,14 @@ def check_and_init_quiz(completed_topics, username):
     # Check if quiz should be unlocked
     lock_msg_update, quiz_col_update = check_quiz_unlock(completed_topics, username)
     
-    # Determine if quiz is unlocked by checking if any topic is completed
-    # (same logic as in check_quiz_unlock)
-    is_quiz_unlocked = len(completed_topics) > 0 if completed_topics else False
+    # Determine if quiz is unlocked by checking if any SUBTOPIC is completed
+    # (subtopics have "↳" prefix)
+    is_quiz_unlocked = False
+    if completed_topics:
+        for completed in completed_topics:
+            if completed.strip().startswith("↳") or "  ↳" in completed:
+                is_quiz_unlocked = True
+                break
     
     # If quiz is now unlocked (visible), initialize it
     if is_quiz_unlocked and username:
@@ -286,9 +291,21 @@ def create_app():
                     with curriculum_col:
                         gr.Markdown("## Study Curriculum")
                         chapter_buttons = []
+                        chapter_checkboxes = []
                         for i in range(10):  # Max 10 chapters
-                            btn = gr.Button(visible=False, elem_classes=["chapter-btn"])
-                            chapter_buttons.append(btn)
+                            with gr.Row():
+                                checkbox = gr.Checkbox(visible=False, label="", scale=1, elem_classes=["chapter-checkbox"])
+                                btn = gr.Button(visible=False, elem_classes=["chapter-btn"], scale=9)
+                                chapter_checkboxes.append(checkbox)
+                                chapter_buttons.append(btn)
+                    
+                    # Study Material section - shows current subtopic material
+                    study_material_section = gr.Accordion("📚 Current Study Material", open=True, visible=False)
+                    with study_material_section:
+                        study_material_display = gr.Markdown(
+                            value="Study material will appear here after generating curriculum.",
+                            elem_classes=["study-material"]
+                        )
                     
                     # Quiz section
                     quiz_accordion = gr.Accordion("Quiz", visible=False)
@@ -356,45 +373,41 @@ def create_app():
                 outputs=[validation_status]
             )
             
-            generate_outputs = [curriculum_col] + chapter_buttons + [unlocked_topics_state, expanded_topics_state, completed_topics_state]
+            generate_outputs = [curriculum_col] + chapter_checkboxes + chapter_buttons + [study_material_section, study_material_display, unlocked_topics_state, expanded_topics_state, completed_topics_state]
             generate_btn.click(
                 generate_curriculum,
                 inputs=[file_upload, validation_status, username_state, buddy_pref],
                 outputs=generate_outputs
             )
             
-            # Connect chapter buttons
-            mark_outputs = [
-                quiz_accordion,
-                score_counter,
-                current_chapter,
-                total_questions_state
-            ] + quiz_components + chapter_buttons + [expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn]
+            # Buttons are now non-clickable (interactive=False), so no click handlers needed
             
-            for btn in chapter_buttons:
-                btn.click(
-                    mark_chapter_complete,
-                    inputs=[btn, expanded_topics_state, unlocked_topics_state, completed_topics_state, username_state],
-                    outputs=mark_outputs
+            # Connect checkboxes for marking completion
+            checkbox_outputs = chapter_checkboxes + chapter_buttons + [unlocked_topics_state, completed_topics_state]
+            
+            # Helper function to create checkbox handler with correct index
+            def make_checkbox_handler(idx):
+                def handler(checkbox_value, unlocked, expanded, completed, username, *buttons):
+                    return mark_topic_complete(checkbox_value, idx, unlocked, expanded, completed, username, *buttons)
+                return handler
+            
+            for i, checkbox in enumerate(chapter_checkboxes):
+                checkbox.change(
+                    make_checkbox_handler(i),
+                    inputs=[checkbox, unlocked_topics_state, expanded_topics_state, completed_topics_state, username_state] + chapter_buttons,
+                    outputs=checkbox_outputs
                 )
             
             # Submit answers
             submit_inputs = [current_chapter, total_questions_state, unlocked_topics_state, expanded_topics_state, completed_topics_state, username_state] + quiz_components[::2]
-            submit_outputs = [score_counter] + quiz_components[1::2] + chapter_buttons + [unlocked_topics_state, expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn]
+            submit_outputs = [score_counter] + quiz_components[1::2] + chapter_checkboxes + chapter_buttons + [unlocked_topics_state, expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn]
             submit_btn.click(
                 check_answers,
                 inputs=submit_inputs,
                 outputs=submit_outputs
             )
             
-            # Next Chapter button
-            next_chapter_inputs = [current_chapter, unlocked_topics_state, expanded_topics_state, completed_topics_state, username_state]
-            next_chapter_outputs = mark_outputs
-            next_chapter_btn.click(
-                go_to_next_chapter,
-                inputs=next_chapter_inputs,
-                outputs=next_chapter_outputs
-            )
+            # Next Chapter button - removed since users now manually check boxes to complete topics
             
             # Chat functionality
             msg.submit(send_message, [msg, chatbot, buddy_pref], [msg, chatbot])

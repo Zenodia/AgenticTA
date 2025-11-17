@@ -41,6 +41,7 @@ from colorama import Fore
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
+from standalone_quizes_gen import get_quiz, quiz_output_parser
 f=open("/workspace/docker-compose.yml","r")
 yaml_f=yaml.safe_load(f)
 global mnt_folder
@@ -239,22 +240,43 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
     print(Fore.MAGENTA + "Generated _curriculum (flattened):", _curriculum, Fore.RESET)
     print(Fore.GREEN + "Unlocked topics:", list(unlocked_topics), Fore.RESET)
     
-    # Create chapter buttons (10 max) - hide subtopics initially
+    # Auto-expand all topics with subtopics
+    expanded_topics_set = set()
+    for item in curriculum_formatted:
+        if isinstance(item, dict) and "subtopics" in item and len(item["subtopics"]) > 1:
+            # Strip numbering for consistency
+            topic_stripped = re.sub(r'^\d+:', '', item['topic']).strip()
+            expanded_topics_set.add(topic_stripped)
+            print(Fore.MAGENTA + f"Auto-expanding: '{topic_stripped}'", Fore.RESET)
+    
+    # Create checkboxes and buttons (10 max) - all visible, no hiding
     outputs = [gr.Column(visible=True)]
+    
+    # First add all checkboxes - all visible from the start
     for i in range(10):
         if i < len(_curriculum):
             button_text = _curriculum[i]
-            is_unlocked = button_text in unlocked_topics
+            # All checkboxes visible
+            outputs.append(gr.Checkbox(visible=True, value=False))
+        else:
+            outputs.append(gr.Checkbox(visible=False))
+    
+    # Then add all buttons - non-interactive (not clickable)
+    for i in range(10):
+        if i < len(_curriculum):
+            button_text = _curriculum[i]
             is_subtopic = button_text.startswith("  ↳ ")
-            # Hide subtopics initially, show main topics
-            print(Fore.YELLOW + f"Button {i}: text='{button_text}', visible={not is_subtopic}, unlocked={is_unlocked}, is_subtopic={is_subtopic}", Fore.RESET)
-            outputs.append(gr.Button(button_text, visible=not is_subtopic, interactive=is_unlocked))
+            # All buttons visible but NOT clickable
+            print(Fore.YELLOW + f"Button {i}: text='{button_text}', visible=True, interactive=False", Fore.RESET)
+            outputs.append(gr.Button(button_text, visible=True, interactive=False))
         else:
             outputs.append(gr.Button(visible=False))
     
-    # Return outputs + unlocked topics + expanded topics + completed topics (all empty initially)
+    # Return outputs + study material section + unlocked topics + expanded topics + completed topics
+    outputs.append(gr.Accordion(visible=True))  # Show study material section
+    outputs.append(gr.Markdown(value=response))  # Display first subtopic's study material
     outputs.append(list(unlocked_topics))
-    outputs.append([])  # No topics expanded initially
+    outputs.append(list(expanded_topics_set))  # All topics with subtopics are expanded
     outputs.append([])  # No topics completed initially
     return outputs
 
@@ -330,164 +352,19 @@ def handle_file_upload(files, username, progress=gr.Progress()):
     return message
 
 
-def mark_chapter_complete(chapter_name, expanded_topics, unlocked_topics, completed_topics, username, progress=gr.Progress()):
-    """Mark a chapter as complete and prepare quiz"""
-    print(Fore.BLUE + f"mark_chapter_complete called with chapter_name='{chapter_name}', username='{username}'", Fore.RESET)
-    print(Fore.CYAN + f"expanded_topics={expanded_topics}, unlocked_topics={unlocked_topics}", Fore.RESET)
+# Note: show_chapter_content removed - buttons are now non-clickable
+
+
+def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expanded_topics, completed_topics, username, *button_values):
+    """Mark a topic as complete/incomplete based on checkbox change"""
+    print(Fore.BLUE + f"mark_topic_complete called: checkbox_{checkbox_index}={checkbox_value}, username='{username}'", Fore.RESET)
     
     # Load curriculum from user state
     CURRICULUM = get_curriculum_from_user_state(username)
-    print(Fore.MAGENTA + f"Loaded CURRICULUM: {CURRICULUM}", Fore.RESET)
-    
     if not CURRICULUM:
-        print(Fore.YELLOW + "No curriculum loaded, using SAMPLE_CURRICULUM", Fore.RESET)
         CURRICULUM = SAMPLE_CURRICULUM
     
-    # Strip numbering from chapter_name (e.g., "0:Sweden: Key Facts" -> "Sweden: Key Facts")
-    chapter_name_stripped = re.sub(r'^\d+:', '', chapter_name).strip()
-    print(Fore.YELLOW + f"Stripped chapter_name: '{chapter_name}' -> '{chapter_name_stripped}'", Fore.RESET)
-    
-    # Check if this is a main topic with subtopics
-    has_subtopics = False
-    for item in CURRICULUM:
-        if isinstance(item, dict):
-            # Also strip numbering from topic for comparison
-            topic_stripped = re.sub(r'^\d+:', '', item['topic']).strip()
-            print(Fore.GREEN + f"Checking if '{topic_stripped}' == '{chapter_name_stripped}'", Fore.RESET)
-            if topic_stripped == chapter_name_stripped or item["topic"] == chapter_name:
-                has_subtopics = True
-                print(Fore.GREEN + f"Found match! has_subtopics=True", Fore.RESET)
-                break
-    
-    # If it's a main topic with subtopics, toggle subtopics visibility and return
-    if has_subtopics:
-        # Toggle expanded state
-        new_expanded = set(expanded_topics)
-        if chapter_name in new_expanded:
-            new_expanded.remove(chapter_name)
-        else:
-            new_expanded.add(chapter_name)
-        
-        # Update button visibility but don't open quiz
-        curriculum = []
-        for item in CURRICULUM:
-            if isinstance(item, dict):
-                curriculum.append(item["topic"])
-                for subtopic in item["subtopics"][:10]:  # Max 10 subtopics
-                    curriculum.append(f"  ↳ {subtopic}")
-            else:
-                curriculum.append(item)
-        
-        button_updates = []
-        for i in range(10):
-            if i < len(curriculum):
-                topic = curriculum[i]
-                is_subtopic = topic.startswith("  ↳ ")
-                
-                if is_subtopic:
-                    # Find parent topic
-                    parent_topic = None
-                    for j in range(i-1, -1, -1):
-                        if not curriculum[j].startswith("  ↳ "):
-                            parent_topic = curriculum[j]
-                            break
-                    # Show subtopic only if parent is expanded
-                    is_visible = parent_topic in new_expanded
-                else:
-                    # Main topics are always visible
-                    is_visible = True
-                
-                is_unlocked = topic in unlocked_topics
-                is_completed = topic in completed_topics or topic.replace("  ↳ ", "") in completed_topics
-                
-                # Add CSS class for completed topics
-                elem_class = ["chapter-btn"]
-                if is_completed:
-                    elem_class.append("completed-topic")
-                if is_subtopic:
-                    elem_class.append("subtopic-btn")
-                
-                button_updates.append(gr.Button(visible=is_visible, interactive=is_unlocked, elem_classes=elem_class))
-            else:
-                button_updates.append(gr.Button(visible=False))
-        
-        # Create empty quiz components (keep quiz hidden)
-        quiz_components = []
-        for _ in range(10):
-            quiz_components.append(gr.Radio(visible=False))
-            quiz_components.append(gr.Markdown(visible=False))
-        
-        # Return all expected outputs (don't open quiz, just toggle subtopics)
-        return (
-            [gr.Accordion(visible=False),  # Keep quiz hidden
-             gr.Textbox(visible=False),  # Keep score hidden
-             "",  # current_chapter (empty)
-             0]  # total_questions (0)
-            + quiz_components  # 20 components (10 radio + 10 markdown)
-            + button_updates  # 10 buttons
-            + [list(new_expanded),  # expanded_topics_state
-               completed_topics,  # completed_topics_state (unchanged)
-               gr.Button(visible=False),  # Submit button (hidden when no quiz)
-               gr.Button(visible=False)]  # Next Chapter button (hidden when no quiz)
-        )
-    
-    progress(0.3, desc="Preparing quiz...")
-    
-    # Remove indentation prefix if present
-    actual_chapter_name = chapter_name.replace("  ↳ ", "") if "  ↳ " in chapter_name else chapter_name
-    
-    # Get quiz data for the chapter - handle hierarchical structure
-    quiz_data = SAMPLE_QUIZ_DATA.get(actual_chapter_name, None)
-    
-    # Determine if this is a main topic with subtopics, a subtopic, or a simple topic
-    if isinstance(quiz_data, dict) and "questions" in quiz_data:
-        # This is a main topic with subtopics, use the main topic questions
-        quiz_questions = quiz_data["questions"]
-    elif isinstance(quiz_data, list):
-        # This is a simple topic with direct question list
-        quiz_questions = quiz_data
-    else:
-        # Try to find it as a subtopic under its parent
-        quiz_questions = []
-        for topic, data in SAMPLE_QUIZ_DATA.items():
-            if isinstance(data, dict) and "subtopics" in data:
-                if actual_chapter_name in data["subtopics"]:
-                    quiz_questions = data["subtopics"][actual_chapter_name]
-                    break
-    
-    if not quiz_questions:
-        # Generate fake questions if none exist
-        quiz_questions = [
-            {
-                "question": f"Sample question for {chapter_name}?",
-                "choices": ["Choice A", "Choice B", "Choice C", "Choice D", "Choice E"],
-                "answer": "Choice A",
-                "explanation": "This is a sample explanation for the question."
-            }
-        ]
-    
-    # Create quiz components (max 10 questions)
-    quiz_components = []
-    for i in range(10):
-        if i < len(quiz_questions):
-            q = quiz_questions[i]
-            radio = gr.Radio(
-                choices=q["choices"],
-                label=f"Q{i+1}: {q['question']}",
-                interactive=True,
-                visible=True,
-                value=None  # Reset value to None for new quiz
-            )
-            explanation = gr.Markdown(f"**Explanation:** {q['explanation']}", visible=False)
-        else:
-            radio = gr.Radio(visible=False, value=None)
-            explanation = gr.Markdown(visible=False)
-        quiz_components.extend([radio, explanation])
-    
-    total_questions = len(quiz_questions)
-    counter_text = f"0/{total_questions}"
-    
-    # Generate button updates to maintain current state
+    # Flatten curriculum to get topic order
     curriculum = []
     for item in CURRICULUM:
         if isinstance(item, dict):
@@ -497,55 +374,115 @@ def mark_chapter_complete(chapter_name, expanded_topics, unlocked_topics, comple
         else:
             curriculum.append(item)
     
+    # Get the topic name for this checkbox
+    if checkbox_index >= len(curriculum):
+        print(Fore.RED + f"Checkbox index {checkbox_index} out of range", Fore.RESET)
+        # Return current state unchanged
+        return ([gr.update() for _ in range(10)] + [gr.update() for _ in range(10)] + 
+                [unlocked_topics, completed_topics])
+    
+    topic_name = curriculum[checkbox_index]
+    print(Fore.CYAN + f"Topic for checkbox {checkbox_index}: '{topic_name}'", Fore.RESET)
+    
+    # Update completed topics based on checkbox state
+    new_completed = set(completed_topics)
+    new_unlocked = set(unlocked_topics)
+    
+    if checkbox_value:
+        # Mark as complete
+        new_completed.add(topic_name)
+        print(Fore.GREEN + f"Marking '{topic_name}' as completed", Fore.RESET)
+        
+        # Generate quiz if this is a subtopic
+        if topic_name.startswith("  ↳ "):
+            print(Fore.MAGENTA + f"## Generating quiz for subtopic: '{topic_name}'", Fore.RESET)
+            
+            try:
+                # Load user state
+                u = load_user_state(username)
+                if u and "curriculum" in u and len(u["curriculum"]) > 0:
+                    active_chapter = u["curriculum"][0]["active_chapter"]
+                    
+                    # Strip numbering and arrow from topic name
+                    subtopic_name = topic_name.replace("  ↳ ", "").strip()
+                    subtopic_name = re.sub(r'^\d+:\s*', '', subtopic_name).strip()
+                    
+                    print(Fore.CYAN + f"Looking for subtopic: '{subtopic_name}'", Fore.RESET)
+                    
+                    # Find the matching subtopic
+                    for idx, subtopic in enumerate(active_chapter.sub_topics):
+                        subtopic_text = re.sub(r'^\n?\d+:\s*', '', subtopic.sub_topic.strip()).strip()
+                        
+                        if subtopic_name in subtopic_text or subtopic_text in subtopic_name:
+                            print(Fore.GREEN + f"Found matching subtopic at index {idx}", Fore.RESET)
+                            
+                            # Generate quiz
+                            title = active_chapter.name
+                            summary = subtopic.sub_topic
+                            text_chunk = subtopic.study_material
+                            
+                            print(Fore.YELLOW + f"Generating quiz with title='{title}', summary='{summary[:50]}...'", Fore.RESET)
+                            
+                            quizes_ls = get_quiz(title, summary, text_chunk, "")
+                            quizzes_d_ls = quiz_output_parser(quizes_ls)
+                            
+                            print(Fore.GREEN + f"Generated {len(quizzes_d_ls)} quizzes", Fore.RESET)
+                            
+                            # Update the subtopic with the quiz
+                            subtopic.quizzes = quizzes_d_ls
+                            
+                            # Save the user state with updated quizzes back to json file
+                            save_user_state(username, u)
+                            print(Fore.GREEN + f"✓ Quiz generated and saved for subtopic '{subtopic_name}'", Fore.RESET)
+                            break
+                    else:
+                        print(Fore.RED + f"Warning: Could not find matching subtopic for '{subtopic_name}'", Fore.RESET)
+                else:
+                    print(Fore.RED + f"Warning: User state not found or empty", Fore.RESET)
+            except Exception as e:
+                print(Fore.RED + f"Error generating quiz: {e}", Fore.RESET)
+                import traceback
+                traceback.print_exc()
+            
+            # Find next item in curriculum
+            if checkbox_index + 1 < len(curriculum):
+                next_topic = curriculum[checkbox_index + 1]
+                # Only unlock if it's also a subtopic (within same chapter)
+                if next_topic.startswith("  ↳ "):
+                    new_unlocked.add(next_topic)
+                    print(Fore.GREEN + f"Unlocking next subtopic: '{next_topic}'", Fore.RESET)
+    else:
+        # Unmark as complete
+        if topic_name in new_completed:
+            new_completed.remove(topic_name)
+            print(Fore.YELLOW + f"Unmarking '{topic_name}' as completed", Fore.RESET)
+    
+    # Generate checkbox updates - all visible
+    checkbox_updates = []
+    for i in range(10):
+        if i < len(curriculum):
+            topic = curriculum[i]
+            is_checked = topic in new_completed
+            # All checkboxes always visible
+            checkbox_updates.append(gr.Checkbox(visible=True, value=is_checked))
+        else:
+            checkbox_updates.append(gr.Checkbox(visible=False))
+    
+    # Generate button updates - all visible, non-interactive
     button_updates = []
     for i in range(10):
         if i < len(curriculum):
             topic = curriculum[i]
-            is_subtopic = topic.startswith("  ↳ ")
-            
-            if is_subtopic:
-                # Find parent topic
-                parent_topic = None
-                for j in range(i-1, -1, -1):
-                    if not curriculum[j].startswith("  ↳ "):
-                        parent_topic = curriculum[j]
-                        break
-                # Show subtopic only if parent is expanded
-                is_visible = parent_topic in expanded_topics
-            else:
-                # Main topics are always visible
-                is_visible = True
-            
-            is_unlocked = topic in unlocked_topics
-            is_completed = topic in completed_topics or topic.replace("  ↳ ", "") in completed_topics
-            
-            # Add CSS class for completed topics
-            elem_class = ["chapter-btn"]
-            if is_completed:
-                elem_class.append("completed-topic")
-            if is_subtopic:
-                elem_class.append("subtopic-btn")
-            
-            button_updates.append(gr.Button(visible=is_visible, interactive=is_unlocked, elem_classes=elem_class))
+            # All buttons always visible but NOT clickable
+            button_updates.append(gr.Button(value=topic, visible=True, interactive=False))
         else:
             button_updates.append(gr.Button(visible=False))
     
-    return (
-        [gr.Accordion(visible=True),
-         gr.Textbox(value=counter_text, visible=True),
-         actual_chapter_name,  # Current chapter name (without prefix)
-         total_questions]  # Total questions
-        + quiz_components
-        + button_updates
-        + [expanded_topics,  # Maintain expanded state
-           completed_topics,  # Maintain completed state
-           gr.Button(visible=True),  # Submit button (visible when quiz loads)
-           gr.Button(visible=True, interactive=False)]  # Next Chapter button (visible but disabled initially)
-    )
+    return checkbox_updates + button_updates + [list(new_unlocked), list(new_completed)]
 
 
 def update_button_states(unlocked_topics, expanded_topics, completed_topics, username):
-    """Update button interactive states and visibility based on unlocked, expanded, and completed topics"""
+    """Update checkbox and button states based on unlocked, expanded, and completed topics"""
     # Load curriculum from user state
     CURRICULUM = get_curriculum_from_user_state(username)
     if not CURRICULUM:
@@ -561,41 +498,28 @@ def update_button_states(unlocked_topics, expanded_topics, completed_topics, use
         else:
             curriculum.append(item)
     
-    # Create button updates (10 max)
+    # Create checkbox updates (10 max) - all visible
+    checkbox_updates = []
+    for i in range(10):
+        if i < len(curriculum):
+            topic = curriculum[i]
+            is_checked = topic in completed_topics
+            # All checkboxes always visible
+            checkbox_updates.append(gr.Checkbox(visible=True, value=is_checked))
+        else:
+            checkbox_updates.append(gr.Checkbox(visible=False))
+    
+    # Create button updates (10 max) - all visible, non-interactive
     button_updates = []
     for i in range(10):
         if i < len(curriculum):
             topic = curriculum[i]
-            is_subtopic = topic.startswith("  ↳ ")
-            
-            if is_subtopic:
-                # Find parent topic
-                parent_topic = None
-                for j in range(i-1, -1, -1):
-                    if not curriculum[j].startswith("  ↳ "):
-                        parent_topic = curriculum[j]
-                        break
-                # Show subtopic only if parent is expanded
-                is_visible = parent_topic in expanded_topics
-            else:
-                # Main topics are always visible
-                is_visible = True
-            
-            is_unlocked = topic in unlocked_topics
-            is_completed = topic in completed_topics or topic.replace("  ↳ ", "") in completed_topics
-            
-            # Add CSS class for completed topics
-            elem_class = ["chapter-btn"]
-            if is_completed:
-                elem_class.append("completed-topic")
-            if is_subtopic:
-                elem_class.append("subtopic-btn")
-            
-            button_updates.append(gr.Button(visible=is_visible, interactive=is_unlocked, elem_classes=elem_class))
+            # All buttons always visible but NOT clickable
+            button_updates.append(gr.Button(value=topic, visible=True, interactive=False))
         else:
-            button_updates.append(gr.Button())
+            button_updates.append(gr.Button(visible=False))
     
-    return button_updates
+    return checkbox_updates + button_updates
 
 
 def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topics, completed_topics, username, *answers):
@@ -707,38 +631,7 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
     return [gr.Textbox(value=score_text, visible=True)] + explanations_visibility + button_updates + [list(new_unlocked_topics)] + [expanded_topics] + [list(new_completed_topics)] + [submit_btn_update, next_chapter_btn_update]
 
 
-def go_to_next_chapter(current_chapter, unlocked_topics, expanded_topics, completed_topics, username):
-    """Navigate to the next unlocked chapter"""
-    # Load curriculum from user state
-    CURRICULUM = get_curriculum_from_user_state(username)
-    if not CURRICULUM:
-        CURRICULUM = SAMPLE_CURRICULUM
-    
-    # Flatten curriculum to get chapter order
-    curriculum = []
-    for item in CURRICULUM:
-        if isinstance(item, dict):
-            curriculum.append(item["topic"])
-            for subtopic in item["subtopics"]:
-                curriculum.append(f"  ↳ {subtopic}")
-        else:
-            curriculum.append(item)
-    
-    # Find current chapter and get next unlocked one
-    current_full_name = f"  ↳ {current_chapter}" if f"  ↳ {current_chapter}" in curriculum else current_chapter
-    try:
-        current_idx = curriculum.index(current_full_name)
-        # Find next unlocked topic
-        for i in range(current_idx + 1, len(curriculum)):
-            next_topic = curriculum[i]
-            if next_topic in unlocked_topics or not next_topic.startswith("  ↳ "):
-                # Found next unlocked topic, open it
-                return mark_chapter_complete(next_topic, expanded_topics, unlocked_topics, completed_topics, username)
-    except (ValueError, IndexError):
-        pass
-    
-    # If no next chapter found, return current state unchanged
-    return mark_chapter_complete(current_chapter, expanded_topics, unlocked_topics, completed_topics, username)
+# Note: go_to_next_chapter removed - users now manually check boxes to mark completion
 
 
 def send_message(message, history, buddy_pref):
@@ -783,29 +676,21 @@ def check_quiz_unlock(completed_topics, username):
     if not CURRICULUM:
         CURRICULUM = SAMPLE_CURRICULUM
     
-    # Unlock Quiz tab only if a FULL topic is completed
-    # A full topic is either:
-    # 1. A topic without subtopics (like "Cell Structure and Function")
-    # 2. A main topic whose all subtopics are completed (like "Introduction to Biology")
+    # Unlock Quiz tab after the FIRST SUBTOPIC of the FIRST CHAPTER is completed
+    # This means any subtopic with "↳" prefix in completed_topics
     
-    full_topic_complete = False
+    first_subtopic_complete = False
     completed_set = set(completed_topics)
     
-    for item in CURRICULUM:
-        if isinstance(item, dict):
-            # This is a main topic with subtopics
-            # Check if the main topic itself is in completed (meaning all subtopics done)
-            if item["topic"] in completed_set:
-                full_topic_complete = True
-                break
-        else:
-            # This is a simple topic without subtopics
-            if item in completed_set:
-                full_topic_complete = True
-                break
+    # Check if any subtopic is completed (subtopics start with "  ↳ ")
+    for completed in completed_set:
+        if completed.strip().startswith("↳") or "  ↳" in completed:
+            first_subtopic_complete = True
+            print(Fore.GREEN + f"Quiz unlocked - first subtopic completed: {completed}", Fore.RESET)
+            break
     
     # Return visibility updates for lock message and quiz content
-    return gr.Markdown(visible=not full_topic_complete), gr.Column(visible=full_topic_complete)
+    return gr.Markdown(visible=not first_subtopic_complete), gr.Column(visible=first_subtopic_complete)
 
 
 def submit_username(username):
