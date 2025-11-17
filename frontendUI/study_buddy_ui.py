@@ -388,6 +388,10 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
     new_completed = set(completed_topics)
     new_unlocked = set(unlocked_topics)
     
+    # Variable to store generated quiz for immediate use
+    generated_quiz_data = None
+    generated_subtopic_name = None
+    
     if checkbox_value:
         # Mark as complete
         new_completed.add(topic_name)
@@ -400,6 +404,7 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
             try:
                 # Load user state
                 u = load_user_state(username)
+                
                 if u and "curriculum" in u and len(u["curriculum"]) > 0:
                     active_chapter = u["curriculum"][0]["active_chapter"]
                     
@@ -416,7 +421,20 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
                         if subtopic_name in subtopic_text or subtopic_text in subtopic_name:
                             print(Fore.GREEN + f"Found matching subtopic at index {idx}", Fore.RESET)
                             
-                            # Generate quiz
+                            # Check if quiz already exists
+                            if hasattr(subtopic, 'quizzes') and subtopic.quizzes:
+                                # Check if quizzes is a valid list with dict items
+                                if isinstance(subtopic.quizzes, list) and len(subtopic.quizzes) > 0:
+                                    # Verify first item is a dict
+                                    if isinstance(subtopic.quizzes[0], dict):
+                                        print(Fore.CYAN + f"✓ Quiz already exists for this subtopic ({len(subtopic.quizzes)} questions), skipping generation", Fore.RESET)
+                                        # Use existing quiz data
+                                        generated_quiz_data = subtopic.quizzes
+                                        generated_subtopic_name = subtopic_name
+                                        break
+                            
+                            # Generate quiz if it doesn't exist
+                            print(Fore.YELLOW + f"No existing quiz found, generating new quiz...", Fore.RESET)
                             title = active_chapter.name
                             summary = subtopic.sub_topic
                             text_chunk = subtopic.study_material
@@ -428,12 +446,17 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
                             
                             print(Fore.GREEN + f"Generated {len(quizzes_d_ls)} quizzes", Fore.RESET)
                             
+                            # Store the generated quiz data for immediate UI use
+                            generated_quiz_data = quizzes_d_ls
+                            generated_subtopic_name = subtopic_name
+                            
                             # Update the subtopic with the quiz
                             subtopic.quizzes = quizzes_d_ls
                             
                             # Save the user state with updated quizzes back to json file
                             save_user_state(username, u)
                             print(Fore.GREEN + f"✓ Quiz generated and saved for subtopic '{subtopic_name}'", Fore.RESET)
+                            print(Fore.CYAN + f"✓ Quiz data stored in memory for immediate UI display", Fore.RESET)
                             break
                     else:
                         print(Fore.RED + f"Warning: Could not find matching subtopic for '{subtopic_name}'", Fore.RESET)
@@ -478,7 +501,84 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
         else:
             button_updates.append(gr.Button(visible=False))
     
-    return checkbox_updates + button_updates + [list(new_unlocked), list(new_completed)]
+    # Generate quiz UI components if a subtopic was just checked
+    quiz_components = []
+    quiz_accordion_visible = False
+    score_visible = False
+    submit_visible = False
+    current_subtopic_name = ""
+    total_questions = 0
+    
+    # Use the generated quiz data directly (from memory, not from file reload)
+    if checkbox_value and topic_name.startswith("  ↳ ") and generated_quiz_data:
+        print(Fore.CYAN + f"Using generated quiz data from memory for UI display", Fore.RESET)
+        try:
+            quiz_list = generated_quiz_data
+            print(Fore.GREEN + f"Loading {len(quiz_list)} quizzes for display", Fore.RESET)
+            
+            # Create quiz UI components
+            for i in range(10):
+                if i < len(quiz_list):
+                    q = quiz_list[i]
+                    # Quiz format: 'question', 'choices' (list of 4 items), 'answer' (A/B/C/D), 'citations'
+                    question_text = q.get('question', f"Question {i+1}")
+                    choices = q.get('choices', [])
+                    answer = q.get('answer', '')
+                    citations = q.get('citations', [])
+                    
+                    # Create explanation from citations
+                    if citations:
+                        explanation_text = f"**Correct Answer:** {answer}\n\n**Supporting Citations:**\n" + "\n".join(f"- {c}" for c in citations)
+                    else:
+                        explanation_text = f"**Correct Answer:** {answer}"
+                    
+                    radio = gr.Radio(
+                        choices=choices,
+                        label=f"Q{i+1}: {question_text}",
+                        interactive=True,
+                        visible=True,
+                        value=None
+                    )
+                    explanation = gr.Markdown(
+                        explanation_text,
+                        visible=False
+                    )
+                    quiz_components.extend([radio, explanation])
+                else:
+                    quiz_components.extend([
+                        gr.Radio(visible=False, value=None),
+                        gr.Markdown(visible=False)
+                    ])
+            
+            quiz_accordion_visible = True
+            score_visible = True
+            submit_visible = True
+            current_subtopic_name = generated_subtopic_name
+            total_questions = len(quiz_list)
+            print(Fore.GREEN + f"✓ Quiz UI populated with {total_questions} questions", Fore.RESET)
+            
+        except Exception as e:
+            print(Fore.RED + f"Error creating quiz UI: {e}", Fore.RESET)
+            import traceback
+            traceback.print_exc()
+    
+    # If no quiz loaded, create empty components
+    if not quiz_components:
+        for _ in range(10):
+            quiz_components.extend([
+                gr.Radio(visible=False, value=None),
+                gr.Markdown(visible=False)
+            ])
+    
+    return (checkbox_updates + button_updates + 
+            [gr.Accordion(visible=quiz_accordion_visible),  # quiz_accordion
+             gr.Textbox(value=f"0/{total_questions}" if total_questions > 0 else "0/0", visible=score_visible),  # score_counter
+             current_subtopic_name,  # current_chapter
+             total_questions]  # total_questions_state
+            + quiz_components +  # 20 components (10 radio + 10 markdown)
+            [list(new_unlocked), list(new_completed),
+             gr.Button(visible=submit_visible),  # submit_btn
+             gr.Button(visible=False, interactive=False)])  # next_chapter_btn (not used)
 
 
 def update_button_states(unlocked_topics, expanded_topics, completed_topics, username):
@@ -529,32 +629,35 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
     if not CURRICULUM:
         CURRICULUM = SAMPLE_CURRICULUM
     
-    # Get quiz data for the chapter - handle hierarchical structure
-    quiz_data = SAMPLE_QUIZ_DATA.get(chapter_name, None)
+    # Load quiz questions from user state for the current subtopic
+    quiz_questions = []
+    try:
+        u = load_user_state(username)
+        if u and "curriculum" in u and len(u["curriculum"]) > 0:
+            active_chapter = u["curriculum"][0]["active_chapter"]
+            
+            # Find the matching subtopic by name
+            for subtopic in active_chapter.sub_topics:
+                subtopic_text = re.sub(r'^\n?\d+:\s*', '', subtopic.sub_topic.strip()).strip()
+                
+                # Check if this subtopic matches the chapter_name
+                if chapter_name in subtopic_text or subtopic_text in chapter_name:
+                    if hasattr(subtopic, 'quizzes') and subtopic.quizzes:
+                        quiz_questions = subtopic.quizzes
+                        print(Fore.GREEN + f"Loaded {len(quiz_questions)} quizzes for grading", Fore.RESET)
+                        break
+    except Exception as e:
+        print(Fore.RED + f"Error loading quiz questions: {e}", Fore.RESET)
     
-    # Determine if this is a main topic with subtopics, a subtopic, or a simple topic
-    if isinstance(quiz_data, dict) and "questions" in quiz_data:
-        # This is a main topic with subtopics, use the main topic questions
-        quiz_questions = quiz_data["questions"]
-    elif isinstance(quiz_data, list):
-        # This is a simple topic with direct question list
-        quiz_questions = quiz_data
-    else:
-        # Try to find it as a subtopic under its parent
-        quiz_questions = []
-        for topic, data in SAMPLE_QUIZ_DATA.items():
-            if isinstance(data, dict) and "subtopics" in data:
-                if chapter_name in data["subtopics"]:
-                    quiz_questions = data["subtopics"][chapter_name]
-                    break
-    
+    # Fallback to sample if no questions found
     if not quiz_questions:
+        print(Fore.YELLOW + f"No quiz questions found for '{chapter_name}', using sample", Fore.RESET)
         quiz_questions = [
             {
                 "question": f"Sample question for {chapter_name}?",
-                "choices": ["Choice A", "Choice B", "Choice C", "Choice D", "Choice E"],
-                "answer": "Choice A",
-                "explanation": "This is a sample explanation for the question."
+                "choices": ["(A) Choice A", "(B) Choice B", "(C) Choice C", "(D) Choice D"],
+                "answer": "A",
+                "citations": []
             }
         ]
     
@@ -563,9 +666,16 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
     
     for i, q in enumerate(quiz_questions):
         user_answer = answers[i] if i < len(answers) else None
-        correct_answer = q["answer"]
+        correct_answer = q["answer"]  # This is just "A", "B", "C", or "D"
         
-        if user_answer == correct_answer:
+        # Extract the letter from user's choice (e.g., "(A) Text" -> "A")
+        user_answer_letter = None
+        if user_answer:
+            match = re.match(r'\(([A-D])\)', user_answer)
+            if match:
+                user_answer_letter = match.group(1)
+        
+        if user_answer_letter and user_answer_letter == correct_answer:
             correct_count += 1
             
         # Always show explanation after submission

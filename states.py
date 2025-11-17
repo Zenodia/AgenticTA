@@ -38,7 +38,7 @@ class SubTopic(BaseModel):
     status: Optional[Status] = None    
     study_material: Optional[str] # each studying materails should be in markdown format  
     reference: str = Field(description="name of the PDF document, from which this chapter is derived")    
-    quizes : List[dict] # each quiz is a dictionary, user can generate several round of quizes
+    quizzes : Optional[List[dict]] # each quiz is a dictionary, user can generate several round of quizes
     feedback:Optional[List[str]]
 
 
@@ -50,7 +50,7 @@ class Chapter(BaseModel):
     sub_topics: Optional[List[SubTopic]] = Field(description="list of sub_topics under this chapter")    
     reference: str = Field(description="name of the PDF document, from which this chapter is derived")   
     pdf_loc : str = Field(description= "absolute path to where the pdf is located ") 
-    quizes : List[dict] # each quiz is a dictionary, user can generate several round of quizes
+    quizzes : Optional[List[dict]] # each quiz is a dictionary, user can generate several round of quizes
     feedback:Optional[List[str]]    
 
 ## each quiz is a dictionary looks like this 
