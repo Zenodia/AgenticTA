@@ -3,7 +3,7 @@
 import aiohttp
 from typing import AsyncIterator, List, Dict
 from .base import LLMProvider
-from vault import get_secrets_config
+from vault import get_secret
 
 
 class AstraProvider(LLMProvider):
@@ -22,10 +22,7 @@ class AstraProvider(LLMProvider):
         self.endpoint = config["endpoint"].format(deployment_id=deployment_id)
         
         # Get authentication token from Vault (falls back to environment if Vault unavailable)
-        secrets = get_secrets_config()
-        token = secrets.get('ASTRA_TOKEN')
-        if not token:
-            raise ValueError("ASTRA_TOKEN not found in Vault or environment")
+        token = get_secret('ASTRA_TOKEN')
         
         self.headers = {
             "Authorization": f"Bearer {token}",

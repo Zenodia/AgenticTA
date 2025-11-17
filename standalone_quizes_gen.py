@@ -2,10 +2,11 @@ import requests
 import os
 import ast
 import json
+import sys
 from colorama import Fore
 from nodes import init_user_storage,user_exists,load_user_state, update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
 import asyncio
-from vault.client import get_secret_with_fallback
+from vault import get_secret
 import re
 from dotenv import load_dotenv
 load_dotenv()
@@ -13,12 +14,7 @@ load_dotenv()
  
 # Legacy LangChain LLM for fallback chains only
 
-astra_api_key = get_secret_with_fallback(
-    vault_path='agenticta/auth-tokens',
-    vault_key='astra_token',
-    env_var='ASTRA_TOKEN',
-    required=True
-)
+astra_api_key = get_secret('ASTRA_TOKEN')
 
 def inference_call(system_prompt, user_prompt):    
     
@@ -62,7 +58,7 @@ def get_quiz(title, document_summary, chunk_text, additional_instruction):
         output_d=response.json()
         output_str= output_d['choices'][0]["message"]["content"]
     except Exception as exc:
-        output_str= "an error happened during inference call, error msg = \n" + exec 
+        output_str = "an error happened during inference call, error msg = \n" + str(exc) 
     
     return output_str 
 

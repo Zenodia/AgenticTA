@@ -4,12 +4,12 @@ SelfLearner module for enhancing prompts based on past feedback.
 Manages task similarity, feedback selection, and prompt enhancement.
 """
 
-import os
 import json
 import logging
 import shutil
 import asyncio
 from typing import List, Dict, Any, Optional, Union, Callable
+from vault import get_secret
 from .embedder import Embedder
 from .memory import Memory
 
@@ -109,7 +109,7 @@ class SelfLearner:
         self.async_llm_client = None
         
         if self.llm_feedback_selection_layer == "openai":
-            openai_key = os.environ.get("OPENAI_API_KEY")
+            openai_key = get_secret("OPENAI_API_KEY", required=False)
             if openai_key:
                 try:
                     import openai
@@ -119,7 +119,7 @@ class SelfLearner:
                 except ImportError:
                     logger.warning("OpenAI package not installed. Feedback selection will be done without LLM.")
             else:
-                logger.warning("OpenAI API key not found. Feedback selection will be done without LLM.")
+                logger.warning("OPENAI_API_KEY not found. Feedback selection will be done without LLM.")
         else:
             logger.warning(f"Unknown LLM provider: {self.llm_feedback_selection_layer}. "
                           "Feedback selection will be done without LLM.")

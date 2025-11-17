@@ -85,6 +85,15 @@ use_cases:
     description: "Merge/split/modify chapters based on user feedback"
     system_prompt: "You are an expert curriculum designer who can restructure educational content based on user needs."
   
+  extract_sub_chapters:
+    type: llm
+    provider: nvidia
+    model: powerful
+    max_tokens: 36000
+    temperature: 0.3
+    description: "Extract and structure sub-chapters from PDF documents"
+    system_prompt: "You are an expert at analyzing educational documents and extracting structured sub-chapters with clear topics and summaries."
+  
   # ------------------------------------------
   # Study Material Generation
   # ------------------------------------------

@@ -3,7 +3,7 @@
 from typing import AsyncIterator, List, Dict
 from openai import AsyncOpenAI
 from .base import LLMProvider
-from vault import get_secrets_config
+from vault import get_secret
 
 
 class NvidiaProvider(LLMProvider):
@@ -18,10 +18,7 @@ class NvidiaProvider(LLMProvider):
         super().__init__(config)
         
         # Get API key from Vault (falls back to environment if Vault unavailable)
-        secrets = get_secrets_config()
-        api_key = secrets.get('NVIDIA_API_KEY')
-        if not api_key:
-            raise ValueError("NVIDIA_API_KEY not found in Vault or environment")
+        api_key = get_secret('NVIDIA_API_KEY')
         
         self.client = AsyncOpenAI(
             base_url=config["base_url"],

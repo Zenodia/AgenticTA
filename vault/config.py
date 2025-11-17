@@ -19,6 +19,15 @@ class SecretsConfig:
     AUTH_TOKENS_PATH = "agenticta/auth-tokens"
     OBSERVABILITY_PATH = "agenticta/observability"
     
+    # Secrets configuration (env_var_name, vault_path, vault_key, required, description)
+    # To add a new secret: just add a tuple here!
+    SECRETS_REGISTRY = [
+        ('NVIDIA_API_KEY', API_KEYS_PATH, 'nvidia_api_key', True, 'NVIDIA API'),
+        ('HF_TOKEN', API_KEYS_PATH, 'hf_token', False, 'HuggingFace'),
+        ('ASTRA_TOKEN', AUTH_TOKENS_PATH, 'astra_token', False, 'Astra'),
+        ('DATADOG_EMBEDDING_API_TOKEN', OBSERVABILITY_PATH, 'datadog_embedding_api_token', False, 'Datadog'),
+    ]
+    
     def __init__(self, use_vault: bool = True):
         """
         Initialize secrets configuration.
@@ -62,40 +71,21 @@ class SecretsConfig:
         
         logger.info("Loading secrets from Vault...")
         
-        # API Keys
-        try:
-            self._secrets['NVIDIA_API_KEY'] = get_secret_with_fallback(
-                vault_path=self.API_KEYS_PATH,
-                vault_key='nvidia_api_key',
-                env_var='NVIDIA_API_KEY',
-                required=True
-            )
-        except ValueError as e:
-            logger.error(f"Failed to load NVIDIA_API_KEY: {e}")
-            raise
-        
-        self._secrets['HF_TOKEN'] = get_secret_with_fallback(
-            vault_path=self.API_KEYS_PATH,
-            vault_key='hf_token',
-            env_var='HF_TOKEN',
-            required=False
-        )
-        
-        # Authentication Tokens
-        self._secrets['ASTRA_TOKEN'] = get_secret_with_fallback(
-            vault_path=self.AUTH_TOKENS_PATH,
-            vault_key='astra_token',
-            env_var='ASTRA_TOKEN',
-            required=False
-        )
-        
-        # Observability
-        self._secrets['DATADOG_EMBEDDING_API_TOKEN'] = get_secret_with_fallback(
-            vault_path=self.OBSERVABILITY_PATH,
-            vault_key='datadog_embedding_api_token',
-            env_var='DATADOG_EMBEDDING_API_TOKEN',
-            required=False
-        )
+        # Load all secrets using registry configuration
+        for env_var, vault_path, vault_key, required, description in self.SECRETS_REGISTRY:
+            try:
+                self._secrets[env_var] = get_secret_with_fallback(
+                    vault_path=vault_path,
+                    vault_key=vault_key,
+                    env_var=env_var,
+                    required=required
+                )
+            except ValueError as e:
+                if required:
+                    logger.error(f"Failed to load required secret {env_var}: {e}")
+                    raise
+                else:
+                    logger.debug(f"Optional secret {env_var} ({description}) not found")
         
         # Log loaded secrets (without values!)
         loaded = [k for k, v in self._secrets.items() if v is not None]
@@ -105,17 +95,11 @@ class SecretsConfig:
         """Load secrets from environment variables only."""
         logger.info("Loading secrets from environment...")
         
-        env_vars = [
-            'NVIDIA_API_KEY',
-            'HF_TOKEN',
-            'ASTRA_TOKEN',
-            'DATADOG_EMBEDDING_API_TOKEN'
-        ]
-        
-        for var in env_vars:
-            value = os.getenv(var)
+        # Load all secrets from registry (only env_var is needed for env loading)
+        for env_var, _, _, _, _ in self.SECRETS_REGISTRY:
+            value = os.getenv(env_var)
             if value:
-                self._secrets[var] = value
+                self._secrets[env_var] = value
         
         loaded = [k for k, v in self._secrets.items() if v is not None]
         logger.info(f"Loaded {len(loaded)} secrets from environment")

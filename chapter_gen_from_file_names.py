@@ -11,7 +11,7 @@ import requests
 import argparse
 from llm import LLMClient  # This automatically loads dotenv
 from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
-from vault.client import get_secret_with_fallback
+from vault import get_secret
  
 # Initialize the new LLM client
 
@@ -19,17 +19,7 @@ llm_client = LLMClient()
  
 # Legacy LangChain LLM for fallback chains only
 
-nvidia_api_key = get_secret_with_fallback(
-
-    vault_path='agenticta/api-keys',
-
-    vault_key='nvidia_api_key',
-
-    env_var='NVIDIA_API_KEY',
-
-    required=True
-
-)
+nvidia_api_key = get_secret('NVIDIA_API_KEY')
 
 # Legacy LangChain LLM for fallback chains only
 llm = ChatNVIDIA(model="meta/llama-3.1-405b-instruct", api_key=nvidia_api_key, temperature=0.3, max_completion_tokens=36000)

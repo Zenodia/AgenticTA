@@ -1,17 +1,9 @@
 """OpenAI provider."""
 
-import os
-import warnings
 from typing import AsyncIterator, List, Dict
 from openai import AsyncOpenAI
 from .base import LLMProvider
-
-# Try to import Vault integration
-try:
-    from vault import get_secrets_config
-    VAULT_AVAILABLE = True
-except ImportError:
-    VAULT_AVAILABLE = False
+from vault import get_secret
 
 
 class OpenAIProvider(LLMProvider):
@@ -25,30 +17,9 @@ class OpenAIProvider(LLMProvider):
         """
         super().__init__(config)
         
-        # Try Vault first, then fallback to environment
-        api_key = None
+        # Get API key (automatic Vault/env fallback)
         api_key_name = config.get("api_key_env", "OPENAI_API_KEY")
-        
-        if VAULT_AVAILABLE:
-            try:
-                secrets = get_secrets_config()
-                api_key = secrets.get(api_key_name)
-            except Exception as e:
-                warnings.warn(
-                    f"⚠️  Failed to load {api_key_name} from Vault ({e}). "
-                    f"Falling back to environment variable.",
-                    RuntimeWarning
-                )
-        
-        # Fallback to environment variable
-        if not api_key:
-            api_key = os.getenv(api_key_name)
-            if api_key:
-                warnings.warn(
-                    f"⚠️  Using {api_key_name} from environment variable instead of Vault. "
-                    f"Consider migrating to Vault: python scripts/vault/migrate_secrets_to_vault.py",
-                    RuntimeWarning
-                )
+        api_key = get_secret(api_key_name, required=False)
         
         if not api_key:
             raise ValueError(f"API key not found in Vault or environment: {api_key_name}")

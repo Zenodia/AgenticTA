@@ -451,6 +451,75 @@ with gr.Blocks(title="Study Assistant") as demo:
     msg.submit(send_message, [msg, chatbot, buddy_pref], [msg, chatbot])
     send_btn.click(send_message, [msg, chatbot, buddy_pref], [msg, chatbot])
 
+# Health check route
+with demo.route("health") as health_demo:
+    gr.Markdown("# 🏥 System Health Status")
+    
+    def get_system_health():
+        """Get basic system health information"""
+        import platform
+        from datetime import datetime
+        
+        # Basic system information (no psutil required)
+        system_info = {
+            "Platform": platform.system(),
+            "Python Version": platform.python_version(),
+            "Architecture": platform.machine(),
+            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # Check workspace directories
+        pdf_dir = Path("/workspace/mnt/pdfs/")
+        user_dirs = list(Path("/workspace/mnt/").glob("user_*"))
+        
+        return system_info, len(user_dirs), pdf_dir.exists()
+    
+    with gr.Row():
+        with gr.Column():
+            gr.Markdown("## 🔐 Secrets Management")
+            vault_health = gr.Markdown(value=get_vault_status_text())
+            
+            gr.Markdown("## 💻 System Resources")
+            system_health = gr.Markdown()
+            
+            gr.Markdown("## 📁 Workspace Status")
+            workspace_status = gr.Markdown()
+            
+            refresh_btn = gr.Button("🔄 Refresh Health Status", variant="primary")
+    
+    def update_health_status():
+        """Update all health status information"""
+        system_info, user_count, pdf_exists = get_system_health()
+        
+        system_md = "**System Information:**\n\n"
+        for key, value in system_info.items():
+            system_md += f"- **{key}:** {value}\n"
+        
+        workspace_md = f"""**Workspace Information:**
+
+- **User Directories:** {user_count} active
+- **PDF Directory:** {'✅ Available' if pdf_exists else '❌ Not Found'}
+- **Location:** `/workspace/mnt/`
+"""
+        
+        vault_md = get_vault_status_text()
+        
+        return vault_md, system_md, workspace_md
+    
+    # Auto-load on route access
+    health_demo.load(
+        update_health_status,
+        inputs=None,
+        outputs=[vault_health, system_health, workspace_status]
+    )
+    
+    # Manual refresh
+    refresh_btn.click(
+        update_health_status,
+        inputs=None,
+        outputs=[vault_health, system_health, workspace_status]
+    )
+
 # Custom CSS for better UI
 demo.css = """
 .chapter-btn {
