@@ -106,7 +106,7 @@ def get_curriculum_from_user_state(username:str):
         print(Fore.RED + f"Error loading curriculum from user state: {e}", Fore.RESET)
         return []
 
-def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name="Ollie"):
+def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name="Ollie",progress=gr.Progress()):
     """Generate curriculum from uploaded PDF or use sample data"""
     global mnt_folder  
     pdf_loc = os.path.join(mnt_folder, "pdfs")

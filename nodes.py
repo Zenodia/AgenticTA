@@ -576,9 +576,9 @@ async def add_quiz_to_subtopic(user_id: str, save_to: str, subtopic_number: int,
         subtopic = sub_topics[subtopic_number]
         
         if isinstance(subtopic, dict):
-            if "quizes" not in subtopic or not subtopic["quizes"]:
-                subtopic["quizes"] = []
-            subtopic["quizes"].append(quiz)
+            if "quizzes" not in subtopic or not subtopic["quizzes"]:
+                subtopic["quizzes"] = []
+            subtopic["quizzes"].append(quiz)
             print(f"✓ Added quiz to subtopic '{subtopic.get('sub_topic', 'unknown')}'")
         
         return user_state
@@ -643,7 +643,7 @@ async def sub_topic_builder(username,pdf_loc, subject, pdf_f_name):
                 status=Status.NA,
                 study_material=study_material_str,
                 reference=pdf_f_name,
-                quizes = [],
+                quizzes = [],
                 feedback = []
             )
             j+=1
@@ -691,7 +691,7 @@ async def build_next_chapter( username,curriculum : Curriculum ) -> Curriculum :
     sub_topics=subtopics_and_study_material,        
     reference=pdf_f_name,
     pdf_loc = pdf_file_loc,
-    quizes=[],
+    quizzes=[],
     feedback=[])
     
     # Convert Chapter to dict for consistency
@@ -748,7 +748,7 @@ async def build_chapters(username, pdf_files_loc: str ) -> typing.List[Chapter]:
             sub_topics=valid_sub_topics,        
             reference=pdf_f_name,
             pdf_loc = pdf_loc,
-            quizes=[],
+            quizzes=[],
             feedback=[])
             
         else:
@@ -759,7 +759,7 @@ async def build_chapters(username, pdf_files_loc: str ) -> typing.List[Chapter]:
             sub_topics=[],        
             reference=pdf_f_name,
             pdf_loc = pdf_loc,
-            quizes=[],
+            quizzes=[],
             feedback=[])
         
         chapters.append(chap)
