@@ -12,6 +12,7 @@ import os, json, sys
 import gradio as gr
 import time
 import random
+import re
 from config import SAMPLE_CURRICULUM, SAMPLE_QUIZ_DATA, MAX_FILES, MAX_FILE_SIZE_GB, MAX_PAGES_PER_FILE
 from utils import validate_pdf_files
 import shutil
@@ -104,7 +105,7 @@ def get_curriculum_from_user_state(username:str):
         print(Fore.RED + f"Error loading curriculum from user state: {e}", Fore.RESET)
         return []
 
-def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name):
+def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name="Ollie"):
     """Generate curriculum from uploaded PDF or use sample data"""
     global mnt_folder  
     pdf_loc = os.path.join(mnt_folder, "pdfs")
@@ -147,7 +148,7 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
         else:
             print(type(study_plan), study_plan)
         
-    print(Fore.BLUE + "Generated curriculum:", chapters_ls, Fore.RESET)
+    print(Fore.BLUE + "Generated curriculum chapters_ls:", chapters_ls, Fore.RESET)
     # Check if there's a validation error
     if validation_msg and validation_msg.startswith("❌"):
         # Return current state without changes if validation failed
@@ -160,7 +161,15 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
     active_chapter=u["curriculum"][0]["active_chapter"]
     print(type(active_chapter), active_chapter)
 
-    sub_topics=[f"{str(subtopic.number)}:{subtopic.sub_topic}" for subtopic in active_chapter.sub_topics]
+    # Extract subtopics - strip any existing numbering first to avoid duplication
+    sub_topics = []
+    for subtopic in active_chapter.sub_topics:
+        # Get the subtopic text and strip any leading numbering/whitespace
+        subtopic_text = subtopic.sub_topic.strip()
+        subtopic_text = re.sub(r'^\n?\d+:\s*', '', subtopic_text).strip()
+        sub_topics.append(subtopic_text)
+    
+    print(Fore.CYAN + f"Extracted sub_topics: {sub_topics}", Fore.RESET)
     response = f"""
             ### Chapter {str(active_chapter.number)}: {active_chapter.name}
 
@@ -169,9 +178,8 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
             **Study Material:**
 
             {active_chapter.sub_topics[0].study_material}"""
-    i=0
     curriculum_formatted=[]
-    for chapter in chapters_ls:
+    for i, chapter in enumerate(chapters_ls):
         if i==0:
             temp={"topic": chapter,
              "subtopics": sub_topics
@@ -226,14 +234,20 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
         elif i > 0 and not _curriculum[i-1].startswith("  ↳ "):
             unlocked_topics.add(topic)
     
+    # Debug output
+    print(Fore.CYAN + "Generated curriculum_formatted:", curriculum_formatted, Fore.RESET)
+    print(Fore.MAGENTA + "Generated _curriculum (flattened):", _curriculum, Fore.RESET)
+    print(Fore.GREEN + "Unlocked topics:", list(unlocked_topics), Fore.RESET)
+    
     # Create chapter buttons (10 max) - hide subtopics initially
     outputs = [gr.Column(visible=True)]
     for i in range(10):
-        if i < len(curriculum):
-            button_text = curriculum[i]
+        if i < len(_curriculum):
+            button_text = _curriculum[i]
             is_unlocked = button_text in unlocked_topics
             is_subtopic = button_text.startswith("  ↳ ")
             # Hide subtopics initially, show main topics
+            print(Fore.YELLOW + f"Button {i}: text='{button_text}', visible={not is_subtopic}, unlocked={is_unlocked}, is_subtopic={is_subtopic}", Fore.RESET)
             outputs.append(gr.Button(button_text, visible=not is_subtopic, interactive=is_unlocked))
         else:
             outputs.append(gr.Button(visible=False))
@@ -318,17 +332,32 @@ def handle_file_upload(files, username, progress=gr.Progress()):
 
 def mark_chapter_complete(chapter_name, expanded_topics, unlocked_topics, completed_topics, username, progress=gr.Progress()):
     """Mark a chapter as complete and prepare quiz"""
+    print(Fore.BLUE + f"mark_chapter_complete called with chapter_name='{chapter_name}', username='{username}'", Fore.RESET)
+    print(Fore.CYAN + f"expanded_topics={expanded_topics}, unlocked_topics={unlocked_topics}", Fore.RESET)
+    
     # Load curriculum from user state
     CURRICULUM = get_curriculum_from_user_state(username)
+    print(Fore.MAGENTA + f"Loaded CURRICULUM: {CURRICULUM}", Fore.RESET)
+    
     if not CURRICULUM:
+        print(Fore.YELLOW + "No curriculum loaded, using SAMPLE_CURRICULUM", Fore.RESET)
         CURRICULUM = SAMPLE_CURRICULUM
+    
+    # Strip numbering from chapter_name (e.g., "0:Sweden: Key Facts" -> "Sweden: Key Facts")
+    chapter_name_stripped = re.sub(r'^\d+:', '', chapter_name).strip()
+    print(Fore.YELLOW + f"Stripped chapter_name: '{chapter_name}' -> '{chapter_name_stripped}'", Fore.RESET)
     
     # Check if this is a main topic with subtopics
     has_subtopics = False
     for item in CURRICULUM:
-        if isinstance(item, dict) and item["topic"] == chapter_name:
-            has_subtopics = True
-            break
+        if isinstance(item, dict):
+            # Also strip numbering from topic for comparison
+            topic_stripped = re.sub(r'^\d+:', '', item['topic']).strip()
+            print(Fore.GREEN + f"Checking if '{topic_stripped}' == '{chapter_name_stripped}'", Fore.RESET)
+            if topic_stripped == chapter_name_stripped or item["topic"] == chapter_name:
+                has_subtopics = True
+                print(Fore.GREEN + f"Found match! has_subtopics=True", Fore.RESET)
+                break
     
     # If it's a main topic with subtopics, toggle subtopics visibility and return
     if has_subtopics:
