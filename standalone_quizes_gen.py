@@ -58,7 +58,7 @@ def get_quiz(title, document_summary, chunk_text, additional_instruction):
                 )
     
     try:
-        response = inference_call(QUESTION_GENERATION_SYSTEM_PROMPT, user_prompt_str)
+        response = inference_call(QUESTION_GENERATION_SYSTEM_PROMPT_MULTI, user_prompt_str)
         output_d=response.json()
         output_str= output_d['choices'][0]["message"]["content"]
     except Exception as exc:
@@ -230,6 +230,105 @@ Then present the resulting multiple-choice questions as valid JSON objects withi
 ]
 </output_json>"""
 
+
+QUESTION_GENERATION_SYSTEM_PROMPT_OUTPUT_MULTI = """## Output Structure
+
+Present your final output as JSON objects strictly adhering to this Pydantic model within `<output_json>` XML tags:
+
+```python
+class MultipleChoiceQuestion(BaseModel):
+    thought_process: str  # Rationale for the question and distractors
+    question_type: Literal["analytical", "application-based", "clarification",
+                           "counterfactual", "conceptual", "true-false",
+                           "factual", "false-premise", "edge-case"]
+    question: str
+    answer: str  # One of "A", "B", "C", or "D"
+    choices: List[str]  # Must contain exactly 4 items
+    estimated_difficulty: int  # 1-10
+    citations: List[str]  # Direct support from the text_chunk
+```
+
+## Output Format
+
+Begin by thoughtfully analyzing the provided <text_chunk> within <document_analysis> XML tags. Your analysis should identify the key concepts, technical details, and reasoning opportunities found in the text.
+
+Then present the resulting multiple-choice questions as valid JSON objects within <output_json> tags, strictly following this structure:
+
+<document_analysis>
+- Key concept: ...
+- Important facts: ...
+- Reasoning opportunities: ...
+</document_analysis>
+
+<output_json>
+[
+  {
+    "thought_process": "This question targets understanding of how the chunk explains the purpose of semantic chunking in document processing. Distractors are phrased using near-synonyms or subtle distortions of the true concept.",
+    "question_type": "conceptual",
+    "question": "What is the primary reason for using semantic chunking in document preprocessing?",
+    "choices": [
+      "(A) To compress the document into fewer tokens.",
+      "(B) To group content based on semantic similarity and token limits.",
+      "(C) To translate the text into multiple languages.",
+      "(D) To strip metadata and formatting from the input file."
+    ],
+    "answer": "B",
+    "estimated_difficulty": 6,
+    "citations": ["Semantic chunking partitions documents into coherent segments based on semantic similarity and token length constraints."]
+  },
+  ...
+]
+</output_json>"""
+
+QUESTION_GENERATION_SYSTEM_PROMPT_OUTPUT_MULTI = """## Output Structure
+
+Present your final output as JSON objects strictly adhering to this Pydantic model within `<output_json>` XML tags:
+
+```python
+class MultipleChoiceQuestion(BaseModel):
+    thought_process: str  # Rationale for the question and distractors
+    question_type: Literal["analytical", "application-based", "clarification",
+                           "counterfactual", "conceptual", "true-false",
+                           "factual", "false-premise", "edge-case"]
+    question: str
+    answer: str  # One of "A", "B", "C", or "D"
+    choices: List[str]  # Must contain exactly 4 items
+    estimated_difficulty: int  # 1-10
+    citations: List[str]  # Direct support from the text_chunk
+```
+
+## Output Format
+
+Begin by thoughtfully analyzing the provided <text_chunk> within <document_analysis> XML tags. Your analysis should identify the key concepts, technical details, and reasoning opportunities found in the text.
+
+Then present the resulting multiple-choice questions as valid JSON objects within <output_json> tags, strictly following this structure:
+
+<document_analysis>
+- Key concept: ...
+- Important facts: ...
+- Reasoning opportunities: ...
+</document_analysis>
+
+<output_json>
+[
+  {
+    "thought_process": "This question targets understanding of how the chunk explains the purpose of semantic chunking in document processing. Distractors are phrased using near-synonyms or subtle distortions of the true concept.",
+    "question_type": "conceptual",
+    "question": "What is the primary reason for using semantic chunking in document preprocessing?",
+    "choices": [
+      "(A) To compress the document into fewer tokens.",
+      "(B) To group content based on semantic similarity and token limits.",
+      "(C) To translate the text into multiple languages.",
+      "(D) To strip metadata and formatting from the input file."
+    ],
+    "answer": "B",
+    "estimated_difficulty": 6,
+    "citations": ["Semantic chunking partitions documents into coherent segments based on semantic similarity and token length constraints."]
+  },
+  ...
+]
+</output_json>"""
+
 QUESTION_GENERATION_SYSTEM_PROMPT_FOOTER = """## Important Notes
 - Strive to generate questions that inspire genuine curiosity, reflection, and thoughtful engagement.
 - Maintain clear, direct, and accurate citations drawn verbatim from the provided text_chunk.
@@ -242,6 +341,12 @@ QUESTION_GENERATION_SYSTEM_PROMPT_FOOTER = """## Important Notes
 QUESTION_GENERATION_SYSTEM_PROMPT = (
     QUESTION_GENERATION_SYSTEM_PROMPT_HEADER
     + QUESTION_GENERATION_SYSTEM_PROMPT_OUTPUT
+    + QUESTION_GENERATION_SYSTEM_PROMPT_FOOTER
+)
+
+QUESTION_GENERATION_SYSTEM_PROMPT_MULTI = (
+    QUESTION_GENERATION_SYSTEM_PROMPT_HEADER
+    + QUESTION_GENERATION_SYSTEM_PROMPT_OUTPUT_MULTI
     + QUESTION_GENERATION_SYSTEM_PROMPT_FOOTER
 )
 

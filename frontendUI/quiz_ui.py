@@ -2,10 +2,22 @@
 Quiz tab UI components and logic.
 """
 import pandas as pd
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import from root-level modules
+parent_dir = Path(__file__).parent.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
 import os
 import random
 from colorama import Fore
 from utils import get_question, get_answer, get_citation_as_explain, get_choices
+from standalone_quizes_gen import get_quiz, quiz_output_parser
+from nodes import init_user_storage,user_exists,load_user_state,save_user_state, _save_store, _load_store
+from nodes import update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
+import asyncio
+from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic, printmd
 import yaml
 import os
 from colorama import Fore
@@ -19,25 +31,33 @@ user_answers = []
 quiz_data = []
 df = None
 
+store_path, user_store_dir = init_user_storage(save_to, username)
 
-def load_quiz_data(mnt_folder=mnt_folder):
+
+def load_quiz_data(mnt_folder=mnt_folder, username):
     """Load quiz data from CSV files"""
-    global df, quiz_data
-    csv_dir = os.path.join(mnt_folder, "csvs")
-    os.makedirs(csv_dir, exist_ok=True)
+    global quiz_data
+    store_path, user_store_dir = init_user_storage(save_to, username)
+    u=load_user_state(username)
+    quizzes_d_ls = u["curriculum"][0]["active_chapter"].sub_topics[0].quizes 
+    if quizzes_d_ls: 
+        quiz_data=quizzes_d_ls
+    else:
+        title=active_chapter.name
+        summary=active_chapter.sub_topics[0].sub_topic
+        text_chunk=active_chapter.sub_topics[0].study_material
+        quizes_ls= get_quiz(title, summary, text_chunk, "")
+        quizzes_d_ls=quiz_output_parser(quizes_ls)
     try :
-        files = [f for f in os.listdir(csv_dir) if f.endswith('.csv') and not f.startswith("summary_")]
-        f = random.choice(files)
-        df = pd.read_csv(os.path.join(csv_dir, f))
-        df = df.sample(n=2, replace=True)
-        n = len(df)
+        
         quiz_data = []
         for i in range(n):
+            quiz_d = quizzes_d_ls[i]
             item = {
-                "question": get_question(i, df),
-                "choices": get_choices(i, df),
-                "answer": get_answer(i, df),
-                "explanation": get_citation_as_explain(i, df)
+                "question": get_question(quiz_d),
+                "choices": get_choices(quiz_d),
+                "answer": get_answer(quiz_d),
+                "explanation": get_citation_as_explain(quiz_d)
             }
             quiz_data.append(item)
     except Exception as e:
