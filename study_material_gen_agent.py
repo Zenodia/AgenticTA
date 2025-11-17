@@ -61,12 +61,12 @@ study_material_gen_prompts= PromptTemplate(
     Begin""")
 )
 
-async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
+async def study_material_gen(username,subject,sub_topic,pdf_file_name, num_docs):
     valid_flag=False
     cnt=0
     num_docs=3
     while valid_flag==False or cnt <= 3: # allow re-trial 3 times 
-        valid_flag , output = await filter_documents_by_file_name(sub_topic,pdf_file_name,num_docs)
+        valid_flag , output = await filter_documents_by_file_name(username,sub_topic,pdf_file_name,num_docs)
         print("got valid output =" , valid_flag , valid_flag == False ) 
         if valid_flag:
             break   
@@ -74,7 +74,7 @@ async def study_material_gen(subject,sub_topic,pdf_file_name, num_docs):
             break     
         cnt += 1
     if not valid_flag :
-        valid_flag , output = await filter_documents_by_file_name(sub_topic,None,num_docs)
+        valid_flag , output = await filter_documents_by_file_name(username,sub_topic,None,num_docs)
 
     if len(output)>0 :   
         detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])

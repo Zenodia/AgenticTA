@@ -443,9 +443,10 @@ async def move_to_next_chapter(user_id: str, save_to: str) -> User:
     - Moves to next chapter (sets it as active with status STARTED)
     - Updates the study plan accordingly
     """
+    
     async def _move_to_next(user_state: User) -> User:
         curriculum_list = user_state.get("curriculum")
-        
+        user_id = user_state.get("user_id")
         # curriculum is stored as List[Curriculum] per User TypedDict definition
         if not curriculum_list or not isinstance(curriculum_list, list):
             print("Warning: No curriculum found for user")
@@ -462,7 +463,7 @@ async def move_to_next_chapter(user_id: str, save_to: str) -> User:
             print("Warning: Invalid curriculum format")
             return user_state
         
-        new_curr = await build_next_chapter(curriculum)
+        new_curr = await build_next_chapter(user_id, curriculum)
         user_state["curriculum"] = [convert_to_json_safe(new_curr)]
         return user_state
     
@@ -585,7 +586,7 @@ async def add_quiz_to_subtopic(user_id: str, save_to: str, subtopic_number: int,
     return await update_and_save_user_state(user_id, save_to, _add_quiz)
 
 
-def parallel_extract_study_materials(subject, sub_topics, pdf_file, num_docs):   
+def parallel_extract_study_materials(username, subject, sub_topics, pdf_file, num_docs):   
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         # study_material_gen is an async coroutine. Create a small
@@ -593,7 +594,7 @@ def parallel_extract_study_materials(subject, sub_topics, pdf_file, num_docs):
         # ThreadPoolExecutor receives a regular callable that returns the
         # coroutine result (and avoids un-awaited coroutine warnings).
         def _sync_run(sub_topic):
-            return asyncio.run(study_material_gen(subject, sub_topic, pdf_file, num_docs))
+            return asyncio.run(study_material_gen(username,subject, sub_topic, pdf_file, num_docs))
 
         future_to_study_material = {executor.submit(_sync_run, sub_topic): sub_topic for sub_topic in sub_topics}
         outputs = []
@@ -613,7 +614,7 @@ def parallel_extract_study_materials(subject, sub_topics, pdf_file, num_docs):
                 #outputs.append
     print(Fore.BLUE +"#### extracted future_to_page_text >>>> ", len(outputs), type(outputs),outputs[-1], Fore.RESET)
     return outputs
-async def sub_topic_builder(pdf_loc, subject, pdf_f_name):
+async def sub_topic_builder(username,pdf_loc, subject, pdf_f_name):
     sub_topics = parallel_extract_pdf_page_and_text(pdf_loc)
     sub_topics_ordered = post_process_extract_sub_chapters(sub_topics)        
     print(Fore.LIGHTGREEN_EX + " creating studying materails for chapter :", Fore.RESET)
@@ -631,7 +632,7 @@ async def sub_topic_builder(pdf_loc, subject, pdf_f_name):
             _sub_topic=sub_topic.split(':')[-1]
         else:
             _sub_topic=sub_topic
-        study_material_str, markdown_str = await study_material_gen(subject,_sub_topic, pdf_f_name, num_docs)
+        study_material_str, markdown_str = await study_material_gen(username,subject,_sub_topic, pdf_f_name, num_docs)
         if markdown_str == "":
             pass
             print(Fore.YELLOW + f"invalid subtopic {sub_topic} failed to fetch relevant documents\n ") 
@@ -654,7 +655,7 @@ async def sub_topic_builder(pdf_loc, subject, pdf_f_name):
     return valid_sub_topics           
 
 
-async def build_next_chapter( curriculum : Curriculum ) -> Curriculum :
+async def build_next_chapter( username,curriculum : Curriculum ) -> Curriculum :
     """Try to reuse the heuristics in helper.extract_summaries_and_chapters
     to create Chapter objects. We'll implement a small local parser here so
     the orchestrator is self-contained.
@@ -682,7 +683,7 @@ async def build_next_chapter( curriculum : Curriculum ) -> Curriculum :
     pdf_f_name=pdf_file_loc.split('/')[-1]
     subject=pdf_f_name.split('.pdf')[0]
     
-    subtopics_and_study_material = await sub_topic_builder(pdf_file_loc, subject, pdf_f_name)
+    subtopics_and_study_material = await sub_topic_builder(username,pdf_file_loc, subject, pdf_f_name)
     chap=Chapter(
     number=current_index + 1,
     name=chapter_title,
@@ -708,7 +709,7 @@ async def build_next_chapter( curriculum : Curriculum ) -> Curriculum :
     return curriculum
 
 
-async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
+async def build_chapters(username, pdf_files_loc: str ) -> typing.List[Chapter]:
     """Try to reuse the heuristics in helper.extract_summaries_and_chapters
     to create Chapter objects. We'll implement a small local parser here so
     the orchestrator is self-contained.
@@ -739,7 +740,7 @@ async def build_chapters( pdf_files_loc: str ) -> typing.List[Chapter]:
         pdf_f_name=pdf_loc.split('/')[-1]
         subject=pdf_f_name.split('.pdf')[0]
         if i==0 :
-            valid_sub_topics = await sub_topic_builder(pdf_loc, subject, pdf_f_name)
+            valid_sub_topics = await sub_topic_builder(username,pdf_loc, subject, pdf_f_name)
             chap=Chapter(
             number=i,
             name=chapter_title,
@@ -780,7 +781,8 @@ async def populate_states_for_user(user: User, pdf_files_loc: str, study_buddy_p
     Returns:
         GlobalState TypedDict with populated user, curriculum, and study plan
     """
-    chapters = await build_chapters(pdf_files_loc)
+    username = user["user_id"]
+    chapters = await build_chapters(username,pdf_files_loc)
     print(Fore.LIGHTGREEN_EX + "len of chapter is = \n",len(chapters), chapters, '\n\n', Fore.RESET )
     
     # Handle case when no chapters are found

@@ -29,7 +29,8 @@ def printmd(markdown_str):
 
 IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" #Replace this with the correct IP address
 RAG_SERVER_PORT = "8081"
-BASE_RAG_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
+RAG_BASE_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
+
 
 async def print_response(response):
     """Helper to print API response."""
@@ -56,15 +57,15 @@ async def document_seach(payload, url):
                 output = await print_response(response)
                 return output
     except aiohttp.ClientError as e:
-        logger.error(f"RAG server connection error: {e}", exc_info=True)
+        print(f"RAG server connection error: {e}")
         raise RAGConnectionError(f"Cannot connect to RAG server at {url}", server_url=url)
     except asyncio.TimeoutError:
-        logger.error(f"RAG server timeout for URL: {url}")
+        print(f"RAG server timeout for URL: {url}")
         raise RAGConnectionError(f"RAG server timeout", server_url=url)
 # possible filter expression
 #"filter_expr": '(content_metadata["manufacturer"] like "%ford%" and content_metadata["rating"] > 4.0 and content_metadata["created_date"] between "2020-01-01" and "2024-12-31" and content_metadata["is_public"] == true) or (content_metadata["model"] like "%edge%" and content_metadata["year"] >= 2020 and content_metadata["tags"] in ["technology", "safety", "latest"] and content_metadata["rating"] >= 4.0)'
-async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : int = 5):
-    url = f"{BASE_RAG_URL}/v1/search"
+async def get_documents(username:str , query:str = None, pdf_file_name:str = None, num_docs : int = 5):
+    url = f"{RAG_BASE_URL}/v1/search"
     vdb_top_k=int(num_docs*3)
     if pdf_file_name and query :
         # Use 'like' operator for filename matching (exact == doesn't work with the RAG server)
@@ -74,7 +75,7 @@ async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : i
         "reranker_top_k": num_docs,
         "vdb_top_k": vdb_top_k ,
         "vdb_endpoint": "http://milvus:19530",
-        "collection_names": ["zcharpy"], # Multiple collection retrieval can be used by passing multiple collection names
+        "collection_names": [username], # Multiple collection retrieval can be used by passing multiple collection names
         "messages": [],
         "enable_query_rewriting": False,
         "enable_reranker": True,
@@ -108,10 +109,10 @@ async def get_documents(query:str = None, pdf_file_name:str = None, num_docs : i
     return output
 
 
-async def filter_documents_by_file_name(query,pdf_file,num_docs):    
+async def filter_documents_by_file_name(username, query,pdf_file,num_docs):    
     if ":" in query[:5]:
         query=query.split(":")[-1]
-    output = await get_documents(query, pdf_file, 3)
+    output = await get_documents(username,query, pdf_file, 3)
     try:
         output_d=json.loads(output)
         if len(output_d["results"])>0:
@@ -126,10 +127,12 @@ async def filter_documents_by_file_name(query,pdf_file,num_docs):
 
 if __name__ == "__main__":
     # Test document search with file filter
-    query = "motorway access and restrictions"
-    pdf_file = "SwedenDrivingCourse_Motorway.pdf"    
-    
-    flag, results = asyncio.run(filter_documents_by_file_name(query, pdf_file, 3))
+    #query = "motorway access and restrictions"
+    #pdf_file = "SwedenDrivingCourse_Motorway.pdf"    
+    query="tell me something about Sweden"
+    pdf_file = "SwedenFacts.pdf"    
+    username="zeno"
+    flag, results = asyncio.run(filter_documents_by_file_name(username,query, pdf_file, 3))
     print("---"*10)
     
     if flag and results:

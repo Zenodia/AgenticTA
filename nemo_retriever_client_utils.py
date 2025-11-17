@@ -121,7 +121,8 @@ async def print_response(response):
 
 async def fetch_health_status():
     """Fetch health status asynchronously."""
-    url = f"{BASE_URL}/v1/health"
+    url = f"{RAG_BASE_URL}/v1/health"
+    print("Fetching RAG server health status with url = ", url)
     params = {"check_dependencies": "True"} # Check health of dependencies as well
     async with aiohttp.ClientSession() as session:
         async with session.get(url, params=params) as response:
@@ -142,14 +143,14 @@ async def document_search(payload, url):
             flag = False
     return flag, output
     
-async def get_documents(query):
+async def get_documents(query, username):
     url = f"{RAG_BASE_URL}/v1/search"
     payload={
       "query": query , # replace with your own query 
       "reranker_top_k": 5,
       "vdb_top_k": 20,
       "vdb_endpoint": "http://milvus:19530",
-      "collection_names": ["zcharpy"], # Multiple collection retrieval can be used by passing multiple collection names
+      "collection_names": [username], # Multiple collection retrieval can be used by passing multiple collection names
       "messages": [],
       "enable_query_rewriting": True,
       "enable_reranker": True,
