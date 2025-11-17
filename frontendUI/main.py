@@ -11,6 +11,32 @@ from study_buddy_ui import (
 from quiz_ui import init_quiz, record_answer, next_question, previous_question, submit_quiz
 from colorama import Fore
 import os, sys, json
+
+def check_and_init_quiz(completed_topics, username):
+    """Check if quiz should be unlocked and initialize it if so"""
+    import gradio as gr
+    
+    # Check if quiz should be unlocked
+    lock_msg_update, quiz_col_update = check_quiz_unlock(completed_topics, username)
+    
+    # Determine if quiz is unlocked by checking if any topic is completed
+    # (same logic as in check_quiz_unlock)
+    is_quiz_unlocked = len(completed_topics) > 0 if completed_topics else False
+    
+    # If quiz is now unlocked (visible), initialize it
+    if is_quiz_unlocked and username:
+        try:
+            quiz_init_outputs = init_quiz(username)
+            return (lock_msg_update, quiz_col_update) + quiz_init_outputs
+        except Exception as e:
+            print(Fore.RED + f"Error initializing quiz: {e}", Fore.RESET)
+            # Return empty/default values if initialization fails
+            return (lock_msg_update, quiz_col_update, "", "", gr.Radio(choices=[]), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False))
+    else:
+        # Quiz is still locked, return default empty values
+        return (lock_msg_update, quiz_col_update, "", "", gr.Radio(choices=[]), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False))
+import yaml
+
 # Custom CSS
 CUSTOM_CSS = """
 .chapter-btn {
@@ -182,7 +208,10 @@ button:disabled {
     pointer-events: auto !important;
 }
 """
-
+f=open("/workspace/docker-compose.yml","r")
+yaml_f=yaml.safe_load(f)
+global mnt_folder
+mnt_folder=yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
 
 def create_app():
     """Create and configure the Gradio application"""
@@ -345,12 +374,12 @@ def create_app():
             for btn in chapter_buttons:
                 btn.click(
                     mark_chapter_complete,
-                    inputs=[btn, expanded_topics_state, unlocked_topics_state, completed_topics_state],
+                    inputs=[btn, expanded_topics_state, unlocked_topics_state, completed_topics_state, username_state],
                     outputs=mark_outputs
                 )
             
             # Submit answers
-            submit_inputs = [current_chapter, total_questions_state, unlocked_topics_state, expanded_topics_state, completed_topics_state] + quiz_components[::2]
+            submit_inputs = [current_chapter, total_questions_state, unlocked_topics_state, expanded_topics_state, completed_topics_state, username_state] + quiz_components[::2]
             submit_outputs = [score_counter] + quiz_components[1::2] + chapter_buttons + [unlocked_topics_state, expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn]
             submit_btn.click(
                 check_answers,
@@ -359,7 +388,7 @@ def create_app():
             )
             
             # Next Chapter button
-            next_chapter_inputs = [current_chapter, unlocked_topics_state, expanded_topics_state, completed_topics_state]
+            next_chapter_inputs = [current_chapter, unlocked_topics_state, expanded_topics_state, completed_topics_state, username_state]
             next_chapter_outputs = mark_outputs
             next_chapter_btn.click(
                 go_to_next_chapter,
@@ -423,7 +452,8 @@ def create_app():
                 prev_btn.click(previous_question, None, [progress, question_display, choices, prev_btn, next_btn, submit_btn_quiz])
                 submit_btn_quiz.click(submit_quiz, None, [result_display, result_display, progress, question_display, choices, submit_btn_quiz])
                 
-                demo.load(init_quiz, None, [progress, question_display, choices, prev_btn, next_btn, submit_btn_quiz])
+                # Initialize quiz when user accesses the quiz tab (after curriculum is generated)
+                # Removed demo.load to avoid initialization errors for first-time users
         
         # Username submission event handler
         username_submit_btn.click(
@@ -439,11 +469,11 @@ def create_app():
             outputs=[username_modal, username_display, username_state]
         )
         
-        # Update Quiz tab visibility when completed_topics changes
+        # Update Quiz tab visibility when completed_topics changes and initialize quiz if unlocked
         completed_topics_state.change(
-            check_quiz_unlock,
-            inputs=[completed_topics_state],
-            outputs=[quiz_lock_message, quiz_content_col]
+            check_and_init_quiz,
+            inputs=[completed_topics_state, username_state],
+            outputs=[quiz_lock_message, quiz_content_col, progress, question_display, choices, prev_btn, next_btn, submit_btn_quiz]
         )
     
     demo.css = CUSTOM_CSS

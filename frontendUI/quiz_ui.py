@@ -31,15 +31,15 @@ user_answers = []
 quiz_data = []
 df = None
 
-store_path, user_store_dir = init_user_storage(save_to, username)
 
 
-def load_quiz_data(mnt_folder=mnt_folder, username):
+def load_quiz_data(mnt_folder=mnt_folder, username=None, save_to=None):
     """Load quiz data from CSV files"""
     global quiz_data
     store_path, user_store_dir = init_user_storage(save_to, username)
     u=load_user_state(username)
-    quizzes_d_ls = u["curriculum"][0]["active_chapter"].sub_topics[0].quizes 
+    active_chapter = u["curriculum"][0]["active_chapter"]
+    quizzes_d_ls = active_chapter.sub_topics[0].quizes 
     if quizzes_d_ls: 
         quiz_data=quizzes_d_ls
     else:
@@ -51,7 +51,7 @@ def load_quiz_data(mnt_folder=mnt_folder, username):
     try :
         
         quiz_data = []
-        for i in range(n):
+        for i in range(len(quizzes_d_ls)):
             quiz_d = quizzes_d_ls[i]
             item = {
                 "question": get_question(quiz_d),
@@ -71,10 +71,12 @@ def load_quiz_data(mnt_folder=mnt_folder, username):
         quiz_data = [item]
 
 
-def init_quiz():
+def init_quiz(username):
     """Initialize quiz state"""
     global current_question, user_answers
-    load_quiz_data()
+    # Use global mnt_folder as save_to
+    save_to = mnt_folder
+    load_quiz_data(mnt_folder=mnt_folder, username=username, save_to=save_to)
     current_question = 0
     user_answers = [None] * len(quiz_data)
     return update_question()

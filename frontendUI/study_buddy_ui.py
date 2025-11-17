@@ -46,6 +46,64 @@ global mnt_folder
 mnt_folder=yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
 
 start_fresh=False
+
+def get_curriculum_from_user_state(username:str):
+    """
+    Load and convert curriculum from user state JSON file to SAMPLE_CURRICULUM format.
+    Returns a list in the format expected by the UI functions.
+    """
+    try:
+        user_state = load_user_state(username)
+        if not user_state or "curriculum" not in user_state or len(user_state["curriculum"]) == 0:
+            return []
+        
+        curriculum_data = user_state["curriculum"][0]
+        if "study_plan" not in curriculum_data:
+            return []
+        
+        study_plan = curriculum_data["study_plan"]
+        
+        # Handle both dict and StudyPlan object
+        if isinstance(study_plan, dict) and "study_plan" in study_plan:
+            chapters = study_plan["study_plan"]
+        elif isinstance(study_plan, StudyPlan):
+            chapters = study_plan.study_plan
+        else:
+            return []
+        
+        # Convert to SAMPLE_CURRICULUM format
+        result = []
+        for chapter in chapters:
+            # Handle both dict and Chapter object
+            if isinstance(chapter, dict):
+                chapter_name = chapter.get("name", "")
+                sub_topics = chapter.get("sub_topics", [])
+            else:
+                chapter_name = chapter.name
+                sub_topics = chapter.sub_topics
+            
+            # If chapter has subtopics, create hierarchical structure
+            if sub_topics and len(sub_topics) > 0:
+                subtopic_names = []
+                for st in sub_topics[:10]:  # Max 10 subtopics
+                    if isinstance(st, dict):
+                        subtopic_names.append(st.get("sub_topic", "").strip())
+                    else:
+                        subtopic_names.append(st.sub_topic.strip())
+                
+                result.append({
+                    "topic": chapter_name,
+                    "subtopics": subtopic_names
+                })
+            else:
+                # Simple chapter without subtopics
+                result.append(chapter_name)
+        
+        return result
+    except Exception as e:
+        print(Fore.RED + f"Error loading curriculum from user state: {e}", Fore.RESET)
+        return []
+
 def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name):
     """Generate curriculum from uploaded PDF or use sample data"""
     global mnt_folder  
@@ -258,11 +316,16 @@ def handle_file_upload(files, username, progress=gr.Progress()):
     return message
 
 
-def mark_chapter_complete(chapter_name, expanded_topics, unlocked_topics, completed_topics, progress=gr.Progress()):
+def mark_chapter_complete(chapter_name, expanded_topics, unlocked_topics, completed_topics, username, progress=gr.Progress()):
     """Mark a chapter as complete and prepare quiz"""
+    # Load curriculum from user state
+    CURRICULUM = get_curriculum_from_user_state(username)
+    if not CURRICULUM:
+        CURRICULUM = SAMPLE_CURRICULUM
+    
     # Check if this is a main topic with subtopics
     has_subtopics = False
-    for item in SAMPLE_CURRICULUM:
+    for item in CURRICULUM:
         if isinstance(item, dict) and item["topic"] == chapter_name:
             has_subtopics = True
             break
@@ -278,7 +341,7 @@ def mark_chapter_complete(chapter_name, expanded_topics, unlocked_topics, comple
         
         # Update button visibility but don't open quiz
         curriculum = []
-        for item in SAMPLE_CURRICULUM:
+        for item in CURRICULUM:
             if isinstance(item, dict):
                 curriculum.append(item["topic"])
                 for subtopic in item["subtopics"][:10]:  # Max 10 subtopics
@@ -397,7 +460,7 @@ def mark_chapter_complete(chapter_name, expanded_topics, unlocked_topics, comple
     
     # Generate button updates to maintain current state
     curriculum = []
-    for item in SAMPLE_CURRICULUM:
+    for item in CURRICULUM:
         if isinstance(item, dict):
             curriculum.append(item["topic"])
             for subtopic in item["subtopics"]:
@@ -452,11 +515,16 @@ def mark_chapter_complete(chapter_name, expanded_topics, unlocked_topics, comple
     )
 
 
-def update_button_states(unlocked_topics, expanded_topics, completed_topics):
+def update_button_states(unlocked_topics, expanded_topics, completed_topics, username):
     """Update button interactive states and visibility based on unlocked, expanded, and completed topics"""
+    # Load curriculum from user state
+    CURRICULUM = get_curriculum_from_user_state(username)
+    if not CURRICULUM:
+        CURRICULUM = SAMPLE_CURRICULUM
+    
     # Flatten curriculum to get button order
     curriculum = []
-    for item in SAMPLE_CURRICULUM:
+    for item in CURRICULUM:
         if isinstance(item, dict):
             curriculum.append(item["topic"])
             for subtopic in item["subtopics"]:
@@ -501,8 +569,13 @@ def update_button_states(unlocked_topics, expanded_topics, completed_topics):
     return button_updates
 
 
-def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topics, completed_topics, *answers):
+def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topics, completed_topics, username, *answers):
     """Check answers and update score"""
+    # Load curriculum from user state
+    CURRICULUM = get_curriculum_from_user_state(username)
+    if not CURRICULUM:
+        CURRICULUM = SAMPLE_CURRICULUM
+    
     # Get quiz data for the chapter - handle hierarchical structure
     quiz_data = SAMPLE_QUIZ_DATA.get(chapter_name, None)
     
@@ -564,7 +637,7 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
         
         # Find the next subtopic to unlock
         curriculum = []
-        for item in SAMPLE_CURRICULUM:
+        for item in CURRICULUM:
             if isinstance(item, dict):
                 curriculum.append(item["topic"])
                 for subtopic in item["subtopics"][:10]:  # Max 10 subtopics
@@ -585,7 +658,7 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
             pass
         
         # Check if all subtopics under a main topic are completed
-        for item in SAMPLE_CURRICULUM:
+        for item in CURRICULUM:
             if isinstance(item, dict):
                 main_topic = item["topic"]
                 all_subtopics_completed = all(
@@ -596,7 +669,7 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
                     new_completed_topics.add(main_topic)
     
     # Update button states (maintaining expanded and completed states)
-    button_updates = update_button_states(new_unlocked_topics, expanded_topics, new_completed_topics)
+    button_updates = update_button_states(new_unlocked_topics, expanded_topics, new_completed_topics, username)
     
     # Keep submit button visible, enable Next Chapter button only if passed
     submit_btn_update = gr.Button(visible=True)
@@ -605,11 +678,16 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
     return [gr.Textbox(value=score_text, visible=True)] + explanations_visibility + button_updates + [list(new_unlocked_topics)] + [expanded_topics] + [list(new_completed_topics)] + [submit_btn_update, next_chapter_btn_update]
 
 
-def go_to_next_chapter(current_chapter, unlocked_topics, expanded_topics, completed_topics):
+def go_to_next_chapter(current_chapter, unlocked_topics, expanded_topics, completed_topics, username):
     """Navigate to the next unlocked chapter"""
+    # Load curriculum from user state
+    CURRICULUM = get_curriculum_from_user_state(username)
+    if not CURRICULUM:
+        CURRICULUM = SAMPLE_CURRICULUM
+    
     # Flatten curriculum to get chapter order
     curriculum = []
-    for item in SAMPLE_CURRICULUM:
+    for item in CURRICULUM:
         if isinstance(item, dict):
             curriculum.append(item["topic"])
             for subtopic in item["subtopics"]:
@@ -626,12 +704,12 @@ def go_to_next_chapter(current_chapter, unlocked_topics, expanded_topics, comple
             next_topic = curriculum[i]
             if next_topic in unlocked_topics or not next_topic.startswith("  ↳ "):
                 # Found next unlocked topic, open it
-                return mark_chapter_complete(next_topic, expanded_topics, unlocked_topics, completed_topics)
+                return mark_chapter_complete(next_topic, expanded_topics, unlocked_topics, completed_topics, username)
     except (ValueError, IndexError):
         pass
     
     # If no next chapter found, return current state unchanged
-    return mark_chapter_complete(current_chapter, expanded_topics, unlocked_topics, completed_topics)
+    return mark_chapter_complete(current_chapter, expanded_topics, unlocked_topics, completed_topics, username)
 
 
 def send_message(message, history, buddy_pref):
@@ -669,8 +747,13 @@ def clear_feedback():
     return "", gr.Textbox(value="", visible=False)
 
 
-def check_quiz_unlock(completed_topics):
+def check_quiz_unlock(completed_topics, username):
     """Check if Quiz tab should be unlocked based on completion"""
+    # Load curriculum from user state
+    CURRICULUM = get_curriculum_from_user_state(username)
+    if not CURRICULUM:
+        CURRICULUM = SAMPLE_CURRICULUM
+    
     # Unlock Quiz tab only if a FULL topic is completed
     # A full topic is either:
     # 1. A topic without subtopics (like "Cell Structure and Function")
@@ -679,7 +762,7 @@ def check_quiz_unlock(completed_topics):
     full_topic_complete = False
     completed_set = set(completed_topics)
     
-    for item in SAMPLE_CURRICULUM:
+    for item in CURRICULUM:
         if isinstance(item, dict):
             # This is a main topic with subtopics
             # Check if the main topic itself is in completed (meaning all subtopics done)
