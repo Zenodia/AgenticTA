@@ -166,7 +166,7 @@ def execute_tools(data):
             summary=active_chapter.sub_topics[0].sub_topic
             text_chunk=active_chapter.sub_topics[0].study_material
             quizes_ls= get_quiz(title, summary, text_chunk, "")
-            active_chapter.sub_topics[0].quizes=quizes_ls
+            active_chapter.sub_topics[0].quizzes=quizes_ls
         data["agent_final_output"]="added quiz , take a look at quiz session"
     elif "next_subtopic" in tool :
         

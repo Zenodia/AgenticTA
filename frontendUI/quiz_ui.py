@@ -39,7 +39,7 @@ def load_quiz_data(mnt_folder=mnt_folder, username=None, save_to=None):
     store_path, user_store_dir = init_user_storage(save_to, username)
     u=load_user_state(username)
     active_chapter = u["curriculum"][0]["active_chapter"]
-    quizzes_d_ls = active_chapter.sub_topics[0].quizes 
+    quizzes_d_ls = active_chapter.sub_topics[0].quizzes 
     if quizzes_d_ls: 
         quiz_data=quizzes_d_ls
     else:
