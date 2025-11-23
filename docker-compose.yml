@@ -15,8 +15,31 @@
 services:
   # ============================================
   # AgenticTA Application
-  # ============================================
-  
+  # ============================================  
+  vllm:
+    build:
+      context: .
+      dockerfile: Dockerfile.qwen_vllm
+      network: host
+    image: any2any
+    shm_size: '64gb'
+    volumes:
+      # Mount source code (for development - changes reflected immediately)
+      - .:/workspace
+      # Mount PDF directory
+      - /mnt/ZenoHD/multimodal/ckpt/:/ckpt
+    environment:
+      - MODEL_CHECKPOINT=/ckpt/Qwen3-Omni-30B-A3B-Instruct
+      - TENSOR_PARALLEL=2
+    ports:
+      - "8901:8901"  # Map container port to host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2  # Match your TENSOR_PARALLEL value
+              capabilities: [gpu]
   agenticta:
     build:
       context: .
