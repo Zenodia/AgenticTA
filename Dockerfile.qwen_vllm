@@ -1,0 +1,9 @@
+FROM qwenllm/qwen3-omni:3-cu124
+
+# Set default values for configurable parameters
+ENV MODEL_CHECKPOINT="Qwen/Qwen3-Omni-30B-A3B-Instruct"
+ENV TENSOR_PARALLEL=4
+
+# Use JSON form with shell to enable variable expansion
+# Changed --host to 0.0.0.0 to allow external access
+CMD ["sh", "-c", "vllm serve ${MODEL_CHECKPOINT} --port 8901 --host 0.0.0.0 --dtype bfloat16 --max-model-len 65536 --allowed-local-media-path / -tp ${TENSOR_PARALLEL}"]
