@@ -92,7 +92,7 @@ async def get_documents(username:str , query:str = None, pdf_file_name:str = Non
         "query": query , # replace with your own query         
         "vdb_top_k": 10,
         "vdb_endpoint": "http://milvus:19530",
-        "collection_names": ["zcharpy"], # Multiple collection retrieval can be used by passing multiple collection names
+        "collection_names": [username], # Multiple collection retrieval can be used by passing multiple collection names
         "messages": [],
         "enable_query_rewriting": True,
         "enable_reranker": False,
@@ -121,9 +121,9 @@ async def filter_documents_by_file_name(username, query,pdf_file,num_docs):
             flag=False
         for o in output_d["results"]:
             print( o["document_name"], o["metadata"]["page_number"],'\n', o["metadata"]["description"])
-        return flag, output_d["results"]
+        return flag, output_d["results"], None
     except:
-        return False, []
+        return False, [], None
 
 if __name__ == "__main__":
     # Test document search with file filter

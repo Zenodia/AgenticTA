@@ -642,6 +642,7 @@ async def sub_topic_builder(username,pdf_loc, subject, pdf_f_name):
                 sub_topic=sub_topic,
                 status=Status.NA,
                 study_material=study_material_str,
+                display_markdown = markdown,
                 reference=pdf_f_name,
                 quizzes = [],
                 feedback = []
@@ -826,7 +827,7 @@ async def populate_states_for_user(user: User, pdf_files_loc: str, study_buddy_p
 
     # Save into store
     save_user_state(user["user_id"], user_dict)
-
+    processed_pdf_files=[os.path.join(pdf_files_loc, pdf_f) for pdf_f in os.listdir(pdf_files_loc) if pdf_f.endswith('.pdf')]
     # Build GlobalState TypedDict with all required fields
     gstate: GlobalState = {
         "input": "initializing",
@@ -837,6 +838,7 @@ async def populate_states_for_user(user: User, pdf_files_loc: str, study_buddy_p
         "next_node_name": "",
         "pdf_loc": pdf_files_loc,
         "save_to": "",  # Will be set by run_for_first_time_user
+        processed_files: processed_pdf_files,
         "agent_final_output": None,
         "intermediate_steps": [],
     }

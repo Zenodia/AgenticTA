@@ -36,12 +36,11 @@ class SubTopic(BaseModel):
     number : int = Field(description="each sub-topic is numbered")
     sub_topic : str = Field(description="name of this sub-topic")
     status: Optional[Status] = None    
-    study_material: Optional[str] # each studying materails should be in markdown format  
+    study_material: Optional[str] # each studying materails should be in markdown format
+    display_markdown: Optional[str] # ready to be displayed markdown string with image in base64 embedded
     reference: str = Field(description="name of the PDF document, from which this chapter is derived")    
     quizzes : Optional[List[dict]] # each quiz is a dictionary, user can generate several round of quizes
     feedback:Optional[List[str]]
-
-
 
 class Chapter(BaseModel):
     number : int = Field(description="each chapter is numbered")
@@ -83,6 +82,7 @@ class GlobalState(TypedDict):
     pdf_loc: str  # the location where the pdfs files are uploaded to, default to /workspace/mnt/pdfs/
     save_to: str  # the location to save processed study material, user states and more, default to /workspace/mnt/
     agent_final_output: Union[str, Markdown, list[str], dict, None]    
+    processed_files: Optiona[list[str]]
     # List of actions and corresponding observations
     # Here we annotate this with `operator.add` to indicate that operations to
     # this state should be ADDED to the existing values (not overwrite it)

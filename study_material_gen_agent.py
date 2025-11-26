@@ -22,11 +22,11 @@ from PIL import Image
 import io
 from IPython.display import Markdown, display
 import markdown
-from search_and_filter_documents import filter_documents_by_file_name
+#from search_and_filter_documents import filter_documents_by_file_name
+from search_and_filter_docs_streaming import filter_documents_by_file_name
 
 def printmd(markdown_str):
     display(Markdown(markdown_str))
-
 
 def strip_thinking_tag(response):
     # Handle None or empty responses
@@ -66,7 +66,7 @@ async def study_material_gen(username,subject,sub_topic,pdf_file_name, num_docs)
     cnt=0
     num_docs=3
     while valid_flag==False or cnt <= 3: # allow re-trial 3 times 
-        valid_flag , output = await filter_documents_by_file_name(username,sub_topic,pdf_file_name,num_docs)
+        valid_flag , output, img_str = await filter_documents_by_file_name(username,sub_topic,pdf_file_name,num_docs)
         print("got valid output =" , valid_flag , valid_flag == False ) 
         if valid_flag:
             break   
@@ -74,10 +74,44 @@ async def study_material_gen(username,subject,sub_topic,pdf_file_name, num_docs)
             break     
         cnt += 1
     if not valid_flag :
-        valid_flag , output = await filter_documents_by_file_name(username,sub_topic,None,num_docs)
+        valid_flag , output, img_str = await filter_documents_by_file_name(username,sub_topic,None,num_docs)
+    if isinstance(output,str):
+        detail_context=output
+        study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
+        
+        # Use the new LLM client with proper use case
+        llm_parsed_output = await llm_client.call(
+            prompt=study_material_generation_prompt_formatted,
+            use_case="study_material_generation"
+        )
+        #print(Fore.BLUE + "using new LLM client > llm parsed relevent_chunks as context output=\n", llm_parsed_output) 
+        #print("---"*10)
+        study_material_str=strip_thinking_tag(llm_parsed_output)        
+        if img_str:
+            
+            markdown_str = markdown.markdown(f'''                
+                {study_material_str}
 
-    if len(output)>0 :   
-        detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])
+                <br/><br/>
+                Reference_document:{pdf_file_name}
+                <br/><br/>
+                Reference_images :
+                {img_str}               
+                ''')
+        else:
+            markdown_str = markdown.markdown(f'''                
+                {study_material_str}
+                
+                <br/><br/>
+                Reference_document:{pdf_file_name}
+                ''')
+
+        print(Fore.BLUE + "stripped thinking tag output=\n", study_material_str, Fore.RESET) 
+        print("---"*10)
+        return study_material_str, markdown_str
+    elif isinstance(output,ls) :   
+        if len(output)>0:
+            detail_context='\n'.join([f"detail_context:{o["metadata"]["description"]}" for o in output if o["document_type"]=="text"])
         study_material_generation_prompt_formatted=study_material_gen_prompts.format(subject=subject, sub_topic=sub_topic, detail_context=detail_context)
         
         # Use the new LLM client with proper use case
