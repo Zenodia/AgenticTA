@@ -669,9 +669,21 @@ async def build_next_chapter( username,curriculum : Curriculum ) -> Curriculum :
     if isinstance(active_chapter, dict):
         active_chapter["status"] = Status.COMPLETED.value
         current_index = active_chapter["number"]
+        sub_topics = active_chapter["sub_topics"]
+        n=len(sub_topics)
+        if isinstance(sub_topics[0], dict):
+            for i in range(len(sub_topics)):
+                sub_topics[i]["status"]=Status.COMPLETED.value
+        else:
+            for sub_t in active_chapter["sub_topics"] :
+                sub_t.Status.COMPLETED
+
     else:
         active_chapter.status = Status.COMPLETED
         current_index = active_chapter.number
+        n=len(active_chapter.sub_topics)
+        ## mark all sub_topics as completed if this chapter is completed
+        _=[ active_chapter.sub_topics[i].Status.COMPLETED for i in range(n) ]
     
     # Access next chapter properties - handle both dict and object access  
     if isinstance(next_chapter, dict):

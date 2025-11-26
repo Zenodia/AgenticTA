@@ -34,7 +34,7 @@ class Status(Enum):
 
 class SubTopic(BaseModel):
     number : int = Field(description="each sub-topic is numbered")
-    sub_topic : str = Field(description="name of this sub-topic")
+    sub_topic : str = Field(description="name of this sub-topic")    
     status: Optional[Status] = None    
     study_material: Optional[str] # each studying materails should be in markdown format
     display_markdown: Optional[str] # ready to be displayed markdown string with image in base64 embedded

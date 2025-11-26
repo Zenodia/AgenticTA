@@ -12,7 +12,7 @@ import gradio as gr
 import time
 import random
 import re
-from config import SAMPLE_CURRICULUM, SAMPLE_QUIZ_DATA, MAX_FILES, MAX_FILE_SIZE_GB, MAX_PAGES_PER_FILE
+from config import  MAX_FILES, MAX_FILE_SIZE_GB, MAX_PAGES_PER_FILE
 from utils import validate_pdf_files
 import shutil
 import yaml
@@ -21,6 +21,7 @@ from colorama import Fore
 from nemo_retriever_client_utils import delete_collections,fetch_collections, create_collection, upload_files_to_nemo_retriever, get_documents,fetch_rag_context
 from nodes import init_user_storage,user_exists,load_user_state,save_user_state, _save_store, _load_store
 from nodes import update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
+from standalone_study_buddy_response import study_buddy_response
 import asyncio
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic, printmd
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
@@ -187,24 +188,6 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
             curriculum_formatted.append(temp)
         else:
             curriculum_formatted.append(chapter)
-
-    """
-    SAMPLE_CURRICULUM = [
-    {
-        "topic": "Introduction to Biology",
-        "subtopics": [
-            "Introduction to Biology - Cell Biology",
-            "Introduction to Biology - Genetics",
-            "Introduction to Biology - Ecology",
-            "Introduction to Biology - Evolution",
-            "Introduction to Biology - Human Anatomy"
-        ]  # Max 10 subtopics allowed
-    },
-    "Cell Structure and Function",
-    "Genetics and Heredity",
-    "Evolution and Natural Selection",
-    "Ecology and Ecosystems"
-    ]"""
 
 
     # In a real app, you would extract content from PDF here
@@ -379,14 +362,14 @@ def handle_file_upload(files, username, progress=gr.Progress()):
 
 def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expanded_topics, completed_topics, username, *button_values):
     """Mark a topic as complete/incomplete based on checkbox change"""
-    print(Fore.BLUE + f"mark_topic_complete called: checkbox_{checkbox_index}={checkbox_value}, username='{username}'", Fore.RESET)
+    global mnt_folder  
+    save_to=mnt_folder
+    print(Fore.BLUE + f"mark_topic_complete called: checkbox_{checkbox_index}={checkbox_value}, username={username}, save_to={save_to}", Fore.RESET)
     print(Fore.BLUE + f"unlocked_topics={unlocked_topics}, expanded_topics={expanded_topics}, completed_topics={completed_topics}","\n", Fore.RESET)
     print(button_values)
     
     # Load curriculum from user state
     CURRICULUM = get_curriculum_from_user_state(username)
-    if not CURRICULUM:
-        CURRICULUM = SAMPLE_CURRICULUM
     
     # Flatten curriculum to get topic order
     curriculum = []
@@ -610,9 +593,7 @@ def update_button_states(unlocked_topics, expanded_topics, completed_topics, use
     """Update checkbox and button states based on unlocked, expanded, and completed topics"""
     # Load curriculum from user state
     CURRICULUM = get_curriculum_from_user_state(username)
-    if not CURRICULUM:
-        CURRICULUM = SAMPLE_CURRICULUM
-    
+       
     # Flatten curriculum to get button order
     curriculum = []
     for item in CURRICULUM:
@@ -649,11 +630,12 @@ def update_button_states(unlocked_topics, expanded_topics, completed_topics, use
 
 def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topics, completed_topics, username, *answers):
     """Check answers and update score"""
-    # Load curriculum from user state
-    CURRICULUM = get_curriculum_from_user_state(username)
-    if not CURRICULUM:
-        CURRICULUM = SAMPLE_CURRICULUM
+    # Load curriculum from user 
+    global mnt_folder
+    save_to=mnt_folder
     
+    CURRICULUM = get_curriculum_from_user_state(username)
+       
     # Load quiz questions from user state for the current subtopic
     quiz_questions = []
     try:
@@ -718,11 +700,12 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
     # Update unlocked and completed topics if passed
     new_unlocked_topics = set(unlocked_topics)
     new_completed_topics = set(completed_topics)
-    
+    print(Fore.MAGENTA + " score_text =\n", score_text, "\n passed =", passed , "\n new_unlocked_topics=", new_unlocked_topics, Fore.RESET)
     if passed:
         # Mark this topic as completed
         new_completed_topics.add(chapter_name)
-        
+        ## if pass, then generate & build the next chapter, it's automatically saved
+        new_user_state = move_to_next_chapter(username, save_to)
         # Find the next subtopic to unlock
         curriculum = []
         for item in CURRICULUM:
@@ -742,6 +725,7 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
                 next_topic = curriculum[current_idx + 1]
                 if next_topic.startswith("  ↳ "):
                     new_unlocked_topics.add(next_topic)
+            print(Fore.MAGENTA + " current_full_name =\n", current_full_name, "\n next_topic =", next_topic , "\n new_unlocked_topics=", new_unlocked_topics, "\nnew_completed_topics", new_completed_topics, Fore.RESET)
         except ValueError:
             pass
         
@@ -809,7 +793,7 @@ def send_message(message, history, buddy_pref, username):
                 user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
                 
                 # Call the study buddy response function
-                from standalone_study_buddy_response import study_buddy_response
+                
                 bot_response = study_buddy_response(
                     chapter_name=chapter_name,
                     sub_topic=sub_topic,
@@ -847,9 +831,7 @@ def check_quiz_unlock(completed_topics, username):
     """Check if Quiz tab should be unlocked based on completion"""
     # Load curriculum from user state
     CURRICULUM = get_curriculum_from_user_state(username)
-    if not CURRICULUM:
-        CURRICULUM = SAMPLE_CURRICULUM
-    
+        
     # Unlock Quiz tab after the FIRST SUBTOPIC of the FIRST CHAPTER is completed
     # This means any subtopic with "↳" prefix in completed_topics
     
@@ -883,4 +865,3 @@ def submit_username(username):
         gr.update(visible=True, value=username_html),  # Show and display username
         username  # Store username in state
     )
-
