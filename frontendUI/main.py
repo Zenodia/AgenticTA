@@ -6,7 +6,7 @@ from config import MAX_FILES, MAX_FILE_SIZE_GB, MAX_PAGES_PER_FILE
 from study_buddy_ui import (
     generate_curriculum, handle_file_upload, mark_topic_complete,
     check_answers, send_message, submit_feedback,
-    clear_feedback, check_quiz_unlock, submit_username
+    clear_feedback, check_quiz_unlock, submit_username, go_to_next_chapter
 )
 from quiz_ui import init_quiz, record_answer, next_question, previous_question, submit_quiz
 from colorama import Fore
@@ -411,7 +411,14 @@ def create_app():
                 outputs=submit_outputs
             )
             
-            # Next Chapter button - removed since users now manually check boxes to complete topics
+            # Next Chapter button - loads the next chapter into UI after passing quiz
+            next_chapter_inputs = [unlocked_topics_state, expanded_topics_state, completed_topics_state, username_state]
+            next_chapter_outputs = chapter_checkboxes + chapter_buttons + [study_material_section, study_material_display, unlocked_topics_state, expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn]
+            next_chapter_btn.click(
+                go_to_next_chapter,
+                inputs=next_chapter_inputs,
+                outputs=next_chapter_outputs
+            )
             
             # Chat functionality
             msg.submit(send_message, [msg, chatbot, buddy_pref, username_state], [msg, chatbot])

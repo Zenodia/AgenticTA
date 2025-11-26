@@ -90,9 +90,6 @@ Usage Examples:
     updated_state = await update_and_save_user_state("babe", "/workspace/mnt/", my_update)
 """
 from __future__ import annotations
-from study_buddy_client import study_buddy_client_requests
-from agent_mem_client import agentic_mem_mcp_client
-from quiz_gen_client import quiz_generation_client
 import json
 import os
 import typing
@@ -100,13 +97,12 @@ from pathlib import Path
 import pandas as pd
 from dataclasses import asdict, dataclass
 from colorama import Fore
-from helper import run_together
-from chapter_gen_from_file_names import chapter_gen_from_pdfs, parse_output_from_chapters
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic
 from states import save_user_to_file, load_user_from_file
 from states import convert_to_json_safe
-from study_material_gen_agent import study_material_gen, printmd
+from chapter_gen_from_file_names import chapter_gen_from_pdfs, parse_output_from_chapters
 from extract_sub_chapters import parallel_extract_pdf_page_and_text, post_process_extract_sub_chapters
+from study_material_gen_agent import study_material_gen
 import asyncio
 import concurrent
 
@@ -683,7 +679,8 @@ async def build_next_chapter( username,curriculum : Curriculum ) -> Curriculum :
         current_index = active_chapter.number
         n=len(active_chapter.sub_topics)
         ## mark all sub_topics as completed if this chapter is completed
-        _=[ active_chapter.sub_topics[i].Status.COMPLETED for i in range(n) ]
+        for i in range(n):
+            active_chapter.sub_topics[i].status= Status.COMPLETED
     
     # Access next chapter properties - handle both dict and object access  
     if isinstance(next_chapter, dict):
@@ -710,13 +707,27 @@ async def build_next_chapter( username,curriculum : Curriculum ) -> Curriculum :
     # Convert Chapter to dict for consistency
     curriculum["active_chapter"] = convert_to_json_safe(chap)
     
-    # Update next_chapter - access study_plan properly
+    # Update the chapter in study_plan with the newly generated study materials
     study_plan_chapters = study_plan.get("study_plan", []) if isinstance(study_plan, dict) else study_plan.study_plan
+    if current_index + 1 < len(study_plan_chapters):
+        # Update the corresponding chapter in the study plan
+        if isinstance(study_plan, dict):
+            # If study_plan is a dict, update the list directly
+            study_plan["study_plan"][current_index + 1] = convert_to_json_safe(chap)
+        else:
+            # If study_plan is a BaseModel, update the list
+            study_plan.study_plan[current_index + 1] = chap
+        print(Fore.LIGHTCYAN_EX + f" ✓ Updated study_plan chapter {current_index + 1} with study materials", Fore.RESET)
+    
+    # Update next_chapter - access study_plan properly
     if current_index + 2 < len(study_plan_chapters):
         next_chap = study_plan_chapters[current_index + 2]
         curriculum["next_chapter"] = convert_to_json_safe(next_chap) if not isinstance(next_chap, dict) else next_chap
     else:
         curriculum["next_chapter"] = None
+    
+    # Ensure the updated study_plan is saved back to curriculum
+    curriculum["study_plan"] = convert_to_json_safe(study_plan) if not isinstance(study_plan, dict) else study_plan
     
     print(Fore.LIGHTGREEN_EX + " Moving to next chapter: ", chapter_title, Fore.RESET)
     return curriculum

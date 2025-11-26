@@ -64,6 +64,7 @@ def get_curriculum_from_user_state(username:str):
             return []
         
         study_plan = curriculum_data["study_plan"]
+        active_chapter = curriculum_data.get("active_chapter")
         
         # Handle both dict and StudyPlan object
         if isinstance(study_plan, dict) and "study_plan" in study_plan:
@@ -73,37 +74,63 @@ def get_curriculum_from_user_state(username:str):
         else:
             return []
         
+        # Get active chapter number and subtopics
+        if active_chapter:
+            if isinstance(active_chapter, dict):
+                active_chapter_num = active_chapter.get("number", -1)
+                active_chapter_subtopics = active_chapter.get("sub_topics", [])
+            else:
+                active_chapter_num = active_chapter.number
+                active_chapter_subtopics = active_chapter.sub_topics
+        else:
+            active_chapter_num = -1
+            active_chapter_subtopics = []
+        
         # Convert to SAMPLE_CURRICULUM format
         result = []
         for chapter in chapters:
             # Handle both dict and Chapter object
             if isinstance(chapter, dict):
+                chapter_num = chapter.get("number", 0)
                 chapter_name = chapter.get("name", "")
                 sub_topics = chapter.get("sub_topics", [])
             else:
+                chapter_num = chapter.number
                 chapter_name = chapter.name
                 sub_topics = chapter.sub_topics
+            
+            # If this is the active chapter and study_plan has no subtopics, use active_chapter's subtopics
+            if chapter_num == active_chapter_num and (not sub_topics or len(sub_topics) == 0):
+                sub_topics = active_chapter_subtopics
+            
+            # Build chapter label with number
+            chapter_label = f"{chapter_num}:{chapter_name}"
             
             # If chapter has subtopics, create hierarchical structure
             if sub_topics and len(sub_topics) > 0:
                 subtopic_names = []
                 for st in sub_topics[:10]:  # Max 10 subtopics
                     if isinstance(st, dict):
-                        subtopic_names.append(st.get("sub_topic", "").strip())
+                        subtopic_text = st.get("sub_topic", "").strip()
                     else:
-                        subtopic_names.append(st.sub_topic.strip())
+                        subtopic_text = st.sub_topic.strip()
+                    # Strip numbering
+                    subtopic_text = re.sub(r'^\n?\d+:\s*', '', subtopic_text).strip()
+                    subtopic_names.append(subtopic_text)
                 
                 result.append({
-                    "topic": chapter_name,
+                    "topic": chapter_label,
                     "subtopics": subtopic_names
                 })
             else:
                 # Simple chapter without subtopics
-                result.append(chapter_name)
+                result.append(chapter_label)
         
         return result
     except Exception as e:
         print(Fore.RED + f"Error loading curriculum from user state: {e}", Fore.RESET)
+        import traceback
+        traceback.print_exc()
         return []
 
 def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name="Ollie",progress=gr.Progress()):
@@ -132,11 +159,17 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
         u=load_user_state(username)
         study_plan =u["curriculum"][0]["study_plan"]
         print(type(study_plan), study_plan)
+        # Load full chapter structure with subtopics
         if isinstance(study_plan, StudyPlan):
-            chapters_ls=[f"{str(chapter.number)}:{chapter.name}" for chapter in study_plan.study_plan]
-            curriculum = chapters_ls
+            chapters_ls = []
+            for chapter in study_plan.study_plan:
+                chapters_ls.append(f"{str(chapter.number)}:{chapter.name}")
         else:
-            print(type(study_plan), study_plan)
+            chapters_ls = []
+            if isinstance(study_plan, dict) and "study_plan" in study_plan:
+                for chapter in study_plan["study_plan"]:
+                    chapter_name = f"{chapter['number']}:{chapter['name']}"
+                    chapters_ls.append(chapter_name)
     else: 
         print(Fore.LIGHTYELLOW_EX + "New user detected, running first time setup..." , Fore.RESET)       
         global_state: GlobalState = asyncio.run(run_for_first_time_user(u, pdf_loc, save_to, preference, store_path, user_store_dir))
@@ -144,10 +177,15 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
         study_plan =u["curriculum"][0]["study_plan"]
         print(type(study_plan), study_plan)
         if isinstance(study_plan, StudyPlan):
-            chapters_ls=[f"{str(chapter.number)}:{chapter.name}" for chapter in study_plan.study_plan]
-            curriculum = chapters_ls
+            chapters_ls = []
+            for chapter in study_plan.study_plan:
+                chapters_ls.append(f"{str(chapter.number)}:{chapter.name}")
         else:
-            print(type(study_plan), study_plan)
+            chapters_ls = []
+            if isinstance(study_plan, dict) and "study_plan" in study_plan:
+                for chapter in study_plan["study_plan"]:
+                    chapter_name = f"{chapter['number']}:{chapter['name']}"
+                    chapters_ls.append(chapter_name)
         
     print(Fore.BLUE + "Generated curriculum chapters_ls:", chapters_ls, Fore.RESET)
     # Check if there's a validation error
@@ -159,35 +197,98 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
         outputs.append([])  # Empty unlocked topics
         outputs.append([])  # Empty expanded topics
         return outputs
-    active_chapter=u["curriculum"][0]["active_chapter"]
+    
+    # Get active chapter from user state for display purposes
+    active_chapter = u["curriculum"][0]["active_chapter"]
     print(type(active_chapter), active_chapter)
 
-    # Extract subtopics - strip any existing numbering first to avoid duplication
-    sub_topics = []
-    for subtopic in active_chapter.sub_topics:
-        # Get the subtopic text and strip any leading numbering/whitespace
-        subtopic_text = subtopic.sub_topic.strip()
-        subtopic_text = re.sub(r'^\n?\d+:\s*', '', subtopic_text).strip()
-        sub_topics.append(subtopic_text)
+    # Build curriculum_formatted from study_plan (which has ALL chapters with their subtopics)
+    # NOT from active_chapter
+    curriculum_formatted = []
     
-    print(Fore.CYAN + f"Extracted sub_topics: {sub_topics}", Fore.RESET)
+    # Get study_plan structure
+    study_plan_obj = u["curriculum"][0]["study_plan"]
+    if isinstance(study_plan_obj, dict) and "study_plan" in study_plan_obj:
+        all_chapters = study_plan_obj["study_plan"]
+    elif isinstance(study_plan_obj, StudyPlan):
+        all_chapters = study_plan_obj.study_plan
+    else:
+        all_chapters = []
+    
+    print(Fore.YELLOW + f"Building curriculum from {len(all_chapters)} chapters in study_plan", Fore.RESET)
+    
+    # Get active chapter number to check if we need to use its subtopics
+    if isinstance(active_chapter, dict):
+        active_chapter_num = active_chapter.get("number", -1)
+        active_chapter_subtopics = active_chapter.get("sub_topics", [])
+    else:
+        active_chapter_num = active_chapter.number
+        active_chapter_subtopics = active_chapter.sub_topics
+    
+    # Iterate through each chapter in study_plan and extract its subtopics
+    for chapter in all_chapters:
+        # Handle both dict and object formats
+        if isinstance(chapter, dict):
+            chapter_num = chapter.get("number", 0)
+            chapter_name = chapter.get("name", "Unknown")
+            chapter_subtopics = chapter.get("sub_topics", [])
+        else:
+            chapter_num = chapter.number
+            chapter_name = chapter.name
+            chapter_subtopics = chapter.sub_topics
+        
+        # If this is the active chapter and study_plan has no subtopics, use active_chapter's subtopics
+        if chapter_num == active_chapter_num and (not chapter_subtopics or len(chapter_subtopics) == 0):
+            chapter_subtopics = active_chapter_subtopics
+            print(Fore.YELLOW + f"Using active_chapter subtopics for chapter {chapter_num}", Fore.RESET)
+        
+        # Extract subtopic texts
+        subtopic_texts = []
+        for subtopic in chapter_subtopics:
+            if isinstance(subtopic, dict):
+                subtopic_text = subtopic.get("sub_topic", "").strip()
+            else:
+                subtopic_text = subtopic.sub_topic.strip()
+            # Strip numbering
+            subtopic_text = re.sub(r'^\n?\d+:\s*', '', subtopic_text).strip()
+            subtopic_texts.append(subtopic_text)
+        
+        # Add to curriculum_formatted
+        chapter_label = f"{chapter_num}:{chapter_name}"
+        if subtopic_texts and len(subtopic_texts) > 0:
+            curriculum_formatted.append({
+                "topic": chapter_label,
+                "subtopics": subtopic_texts[:10]  # Max 10 subtopics
+            })
+            print(Fore.CYAN + f"Chapter {chapter_num}: {chapter_name} with {len(subtopic_texts)} subtopics", Fore.RESET)
+        else:
+            curriculum_formatted.append(chapter_label)
+            print(Fore.CYAN + f"Chapter {chapter_num}: {chapter_name} (no subtopics)", Fore.RESET)
+    
+    # Build response display from active_chapter
+    active_subtopics = active_chapter.get("sub_topics") if isinstance(active_chapter, dict) else active_chapter.sub_topics
+    
+    if isinstance(active_chapter, dict):
+        chapter_number = active_chapter.get("number", 0)
+        chapter_name = active_chapter.get("name", "Unknown")
+        first_subtopic = active_subtopics[0] if active_subtopics else {}
+        first_subtopic_name = first_subtopic.get("sub_topic", "N/A") if isinstance(first_subtopic, dict) else first_subtopic.sub_topic
+        first_study_material = first_subtopic.get("study_material", "No material available") if isinstance(first_subtopic, dict) else first_subtopic.study_material
+    else:
+        chapter_number = active_chapter.number
+        chapter_name = active_chapter.name
+        first_subtopic = active_subtopics[0] if active_subtopics else None
+        first_subtopic_name = first_subtopic.sub_topic if first_subtopic else "N/A"
+        first_study_material = first_subtopic.study_material if first_subtopic else "No material available"
+    
     response = f"""
-            ### Chapter {str(active_chapter.number)}: {active_chapter.name}
+            ### Chapter {str(chapter_number)}: {chapter_name}
 
-            #### 1st Study Topic: {active_chapter.sub_topics[0].sub_topic}
+            #### 1st Study Topic: {first_subtopic_name}
 
             **Study Material:**
 
-            {active_chapter.sub_topics[0].study_material}"""
-    curriculum_formatted=[]
-    for i, chapter in enumerate(chapters_ls):
-        if i==0:
-            temp={"topic": chapter,
-             "subtopics": sub_topics
-            }
-            curriculum_formatted.append(temp)
-        else:
-            curriculum_formatted.append(chapter)
+            {first_study_material}"""
 
 
     # In a real app, you would extract content from PDF here
@@ -423,28 +524,83 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
                     
                     # Find the matching subtopic
                     for idx, subtopic in enumerate(active_chapter.sub_topics):
-                        subtopic_text = re.sub(r'^\n?\d+:\s*', '', subtopic.sub_topic.strip()).strip()
+                        # Handle both dict and object formats
+                        if isinstance(subtopic, dict):
+                            raw_subtopic = subtopic.get("sub_topic", "")
+                        else:
+                            raw_subtopic = subtopic.sub_topic
+                        
+                        subtopic_text = re.sub(r'^\n?\d+:\s*', '', raw_subtopic.strip()).strip()
+                        
+                        print(Fore.YELLOW + f"  Comparing idx={idx}: '{subtopic_name}' vs '{subtopic_text}'", Fore.RESET)
                         
                         if subtopic_name in subtopic_text or subtopic_text in subtopic_name:
                             print(Fore.GREEN + f"Found matching subtopic at index {idx}", Fore.RESET)
                             
                             # Check if quiz already exists
-                            if hasattr(subtopic, 'quizzes') and subtopic.quizzes:
+                            existing_quizzes = subtopic.get("quizzes") if isinstance(subtopic, dict) else getattr(subtopic, 'quizzes', None)
+                            
+                            if existing_quizzes and isinstance(existing_quizzes, list) and len(existing_quizzes) > 0:
                                 # Check if quizzes is a valid list with dict items
-                                if isinstance(subtopic.quizzes, list) and len(subtopic.quizzes) > 0:
-                                    # Verify first item is a dict
-                                    if isinstance(subtopic.quizzes[0], dict):
-                                        print(Fore.CYAN + f"✓ Quiz already exists for this subtopic ({len(subtopic.quizzes)} questions), skipping generation", Fore.RESET)
-                                        # Use existing quiz data
-                                        generated_quiz_data = subtopic.quizzes
-                                        generated_subtopic_name = subtopic_name
-                                        break
+                                if isinstance(existing_quizzes[0], dict):
+                                    print(Fore.CYAN + f"✓ Quiz already exists for this subtopic ({len(existing_quizzes)} questions), skipping generation", Fore.RESET)
+                                    # Use existing quiz data
+                                    generated_quiz_data = existing_quizzes
+                                    generated_subtopic_name = subtopic_name
+                                    
+                                    # Update subtopic status to COMPLETED (checkbox was marked)
+                                    if isinstance(subtopic, dict):
+                                        subtopic["status"] = Status.COMPLETED.value
+                                    else:
+                                        subtopic.status = Status.COMPLETED
+                                    
+                                    # Also update status and quizzes in study_plan to keep both locations in sync
+                                    if "study_plan" in u["curriculum"][0]:
+                                        study_plan = u["curriculum"][0]["study_plan"]
+                                        # Get active chapter number (handle both dict and object)
+                                        if isinstance(active_chapter, dict):
+                                            active_chapter_num = active_chapter.get("number", -1)
+                                        else:
+                                            active_chapter_num = active_chapter.number
+                                        
+                                        if isinstance(study_plan, dict) and "study_plan" in study_plan:
+                                            chapters = study_plan["study_plan"]
+                                            for chapter in chapters:
+                                                if isinstance(chapter, dict) and chapter.get("number") == active_chapter_num:
+                                                    if "sub_topics" in chapter and idx < len(chapter["sub_topics"]):
+                                                        chapter["sub_topics"][idx]["status"] = Status.COMPLETED.value
+                                                        chapter["sub_topics"][idx]["quizzes"] = existing_quizzes
+                                                    break
+                                        elif hasattr(study_plan, 'study_plan'):
+                                            # Handle BaseModel StudyPlan
+                                            chapters = study_plan.study_plan
+                                            for chapter in chapters:
+                                                if hasattr(chapter, 'number') and chapter.number == active_chapter_num:
+                                                    if hasattr(chapter, 'sub_topics') and idx < len(chapter.sub_topics):
+                                                        chapter.sub_topics[idx].status = Status.COMPLETED
+                                                        chapter.sub_topics[idx].quizzes = existing_quizzes
+                                                    break
+                                    
+                                    # Save the updated status and quizzes
+                                    save_user_state(username, u)
+                                    print(Fore.GREEN + f"✓ Status=COMPLETED and quizzes saved for existing quiz subtopic '{subtopic_name}'", Fore.RESET)
+                                    break
                             
                             # Generate quiz if it doesn't exist
                             print(Fore.YELLOW + f"No existing quiz found, generating new quiz...", Fore.RESET)
-                            title = active_chapter.name
-                            summary = subtopic.sub_topic
-                            text_chunk = subtopic.study_material
+                            
+                            # Get subtopic properties (handle both dict and object)
+                            if isinstance(active_chapter, dict):
+                                title = active_chapter.get("name", "")
+                            else:
+                                title = active_chapter.name
+                            
+                            if isinstance(subtopic, dict):
+                                summary = subtopic.get("sub_topic", "")
+                                text_chunk = subtopic.get("study_material", "")
+                            else:
+                                summary = subtopic.sub_topic
+                                text_chunk = subtopic.study_material
                             
                             print(Fore.YELLOW + f"Generating quiz with title='{title}', summary='{summary[:50]}...'", Fore.RESET)
                             
@@ -458,12 +614,44 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
                             generated_quiz_data = quizzes_d_ls
                             generated_subtopic_name = subtopic_name
                             
-                            # Update the subtopic with the quiz
-                            subtopic.quizzes = quizzes_d_ls
+                            # Update the subtopic with the quiz 
+                            if isinstance(subtopic, dict):
+                                subtopic["quizzes"] = quizzes_d_ls
+                                
+                            else:
+                                subtopic.quizzes = quizzes_d_ls
+                                
                             
-                            # Save the user state with updated quizzes back to json file
+                            # Also update status and quizzes in study_plan to keep both locations in sync
+                            if "study_plan" in u["curriculum"][0]:
+                                study_plan = u["curriculum"][0]["study_plan"]
+                                # Get active chapter number (handle both dict and object)
+                                if isinstance(active_chapter, dict):
+                                    active_chapter_num = active_chapter.get("number", -1)
+                                else:
+                                    active_chapter_num = active_chapter.number
+                                
+                                if isinstance(study_plan, dict) and "study_plan" in study_plan:
+                                    chapters = study_plan["study_plan"]
+                                    for chapter in chapters:
+                                        if isinstance(chapter, dict) and chapter.get("number") == active_chapter_num:
+                                            if "sub_topics" in chapter and idx < len(chapter["sub_topics"]):
+                                                chapter["sub_topics"][idx]["status"] = Status.COMPLETED.value
+                                                chapter["sub_topics"][idx]["quizzes"] = quizzes_d_ls
+                                            break
+                                elif hasattr(study_plan, 'study_plan'):
+                                    # Handle BaseModel StudyPlan
+                                    chapters = study_plan.study_plan
+                                    for chapter in chapters:
+                                        if hasattr(chapter, 'number') and chapter.number == active_chapter_num:
+                                            if hasattr(chapter, 'sub_topics') and idx < len(chapter.sub_topics):
+                                                chapter.sub_topics[idx].status = Status.COMPLETED
+                                                chapter.sub_topics[idx].quizzes = quizzes_d_ls
+                                            break
+                            
+                            # Save the user state with updated quizzes AND status back to json file
                             save_user_state(username, u)
-                            print(Fore.GREEN + f"✓ Quiz generated and saved for subtopic '{subtopic_name}'", Fore.RESET)
+                            print(Fore.GREEN + f"✓ Quiz generated, status=COMPLETED, and study_plan updated for subtopic '{subtopic_name}'", Fore.RESET)
                             print(Fore.CYAN + f"✓ Quiz data stored in memory for immediate UI display", Fore.RESET)
                             break
                     else:
@@ -487,6 +675,74 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
         if topic_name in new_completed:
             new_completed.remove(topic_name)
             print(Fore.YELLOW + f"Unmarking '{topic_name}' as completed", Fore.RESET)
+            
+            # If this is a subtopic, also update the status in user state
+            if topic_name.startswith("  ↳ "):
+                try:
+                    # Load user state
+                    u = load_user_state(username)
+                    
+                    if u and "curriculum" in u and len(u["curriculum"]) > 0:
+                        active_chapter = u["curriculum"][0]["active_chapter"]
+                        
+                        # Strip numbering and arrow from topic name
+                        subtopic_name = topic_name.replace("  ↳ ", "").strip()
+                        subtopic_name = re.sub(r'^\d+:\s*', '', subtopic_name).strip()
+                        
+                        print(Fore.CYAN + f"Unmarking subtopic in user state: '{subtopic_name}'", Fore.RESET)
+                        
+                        # Find the matching subtopic
+                        for idx, subtopic in enumerate(active_chapter.sub_topics):
+                            # Handle both dict and object formats
+                            if isinstance(subtopic, dict):
+                                raw_subtopic = subtopic.get("sub_topic", "")
+                            else:
+                                raw_subtopic = subtopic.sub_topic
+                            
+                            subtopic_text = re.sub(r'^\n?\d+:\s*', '', raw_subtopic.strip()).strip()
+                            
+                            if subtopic_name in subtopic_text or subtopic_text in subtopic_name:
+                                print(Fore.GREEN + f"Found matching subtopic at index {idx} to unmark", Fore.RESET)
+                                
+                                # Update the subtopic status back to NA or STARTED
+                                if isinstance(subtopic, dict):
+                                    subtopic["status"] = Status.NA.value
+                                else:
+                                    subtopic.status = Status.NA
+                                
+                                # Also update status in study_plan to keep both locations in sync
+                                if "study_plan" in u["curriculum"][0]:
+                                    study_plan = u["curriculum"][0]["study_plan"]
+                                    # Get active chapter number (handle both dict and object)
+                                    if isinstance(active_chapter, dict):
+                                        active_chapter_num = active_chapter.get("number", -1)
+                                    else:
+                                        active_chapter_num = active_chapter.number
+                                    
+                                    if isinstance(study_plan, dict) and "study_plan" in study_plan:
+                                        chapters = study_plan["study_plan"]
+                                        for chapter in chapters:
+                                            if isinstance(chapter, dict) and chapter.get("number") == active_chapter_num:
+                                                if "sub_topics" in chapter and idx < len(chapter["sub_topics"]):
+                                                    chapter["sub_topics"][idx]["status"] = Status.NA.value
+                                                break
+                                    elif hasattr(study_plan, 'study_plan'):
+                                        # Handle BaseModel StudyPlan
+                                        chapters = study_plan.study_plan
+                                        for chapter in chapters:
+                                            if hasattr(chapter, 'number') and chapter.number == active_chapter_num:
+                                                if hasattr(chapter, 'sub_topics') and idx < len(chapter.sub_topics):
+                                                    chapter.sub_topics[idx].status = Status.NA
+                                                break
+                                
+                                # Save the updated status
+                                save_user_state(username, u)
+                                print(Fore.GREEN + f"✓ Status=NA saved for unmarked subtopic '{subtopic_name}'", Fore.RESET)
+                                break
+                except Exception as e:
+                    print(Fore.RED + f"Error unmarking subtopic: {e}", Fore.RESET)
+                    import traceback
+                    traceback.print_exc()
     
     # Generate checkbox updates - all visible
     checkbox_updates = []
@@ -587,6 +843,142 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
             [list(new_unlocked), list(new_completed),
              gr.Button(visible=submit_visible),  # submit_btn
              gr.Button(visible=False, interactive=False)])  # next_chapter_btn (not used)
+
+
+def go_to_next_chapter(unlocked_topics, expanded_topics, completed_topics, username):
+    """Load and display the next chapter after user passes the quiz.
+    
+    This function:
+    1. Reloads the user state (which was updated by move_to_next_chapter in check_answers)
+    2. Extracts the new active chapter and its subtopics
+    3. Updates the curriculum UI to show the new chapter
+    4. Resets quiz components
+    """
+    global mnt_folder
+    save_to = mnt_folder
+    
+    print(Fore.BLUE + f"go_to_next_chapter called for username={username}", Fore.RESET)
+    
+    try:
+        # Reload user state to get the updated active chapter
+        u = load_user_state(username)
+        
+        if not u or "curriculum" not in u or len(u["curriculum"]) == 0:
+            print(Fore.RED + "Error: No curriculum found", Fore.RESET)
+            # Return current state unchanged
+            return ([gr.update() for _ in range(10)] + [gr.update() for _ in range(10)] + 
+                    [gr.Accordion(visible=True), gr.Markdown(), unlocked_topics, expanded_topics, completed_topics,
+                     gr.Button(visible=False), gr.Button(visible=False)])
+        
+        active_chapter = u["curriculum"][0]["active_chapter"]
+        print(Fore.CYAN + f"Active chapter: {active_chapter.name}", Fore.RESET)
+        
+        # Extract subtopics
+        sub_topics = []
+        for subtopic in active_chapter.sub_topics:
+            subtopic_text = subtopic.sub_topic.strip()
+            subtopic_text = re.sub(r'^\n?\d+:\s*', '', subtopic_text).strip()
+            sub_topics.append(subtopic_text)
+        
+        print(Fore.CYAN + f"Extracted sub_topics: {sub_topics}", Fore.RESET)
+        
+        # Get the full curriculum structure
+        study_plan = u["curriculum"][0]["study_plan"]
+        if isinstance(study_plan, StudyPlan):
+            chapters_ls = [f"{str(chapter.number)}:{chapter.name}" for chapter in study_plan.study_plan]
+        else:
+            chapters_ls = []
+        
+        # Build curriculum_formatted similar to generate_curriculum
+        curriculum_formatted = []
+        for i, chapter in enumerate(chapters_ls):
+            # Check if this is the active chapter
+            chapter_num = int(chapter.split(":")[0])
+            if chapter_num == active_chapter.number:
+                temp = {
+                    "topic": chapter,
+                    "subtopics": sub_topics
+                }
+                curriculum_formatted.append(temp)
+            else:
+                curriculum_formatted.append(chapter)
+        
+        # Flatten curriculum
+        _curriculum = []
+        for item in curriculum_formatted:
+            if isinstance(item, dict):
+                _curriculum.append(item["topic"])
+                subtopics_to_add = item["subtopics"][:10]
+                for subtopic in subtopics_to_add:
+                    _curriculum.append(f"  ↳ {subtopic}")
+            else:
+                _curriculum.append(item)
+        
+        # Initialize unlocked topics - main topics and first subtopic under active chapter
+        new_unlocked = set()
+        for i, topic in enumerate(_curriculum):
+            if not topic.startswith("  ↳ "):
+                new_unlocked.add(topic)
+            elif i > 0 and not _curriculum[i-1].startswith("  ↳ "):
+                new_unlocked.add(topic)
+        
+        # Auto-expand the active chapter
+        new_expanded = set()
+        for item in curriculum_formatted:
+            if isinstance(item, dict) and "subtopics" in item and len(item["subtopics"]) > 1:
+                topic_stripped = re.sub(r'^\d+:', '', item['topic']).strip()
+                new_expanded.add(topic_stripped)
+        
+        # Reset completed topics (new chapter)
+        new_completed = set()
+        
+        # Display first subtopic's study material
+        response = f"""
+                ### Chapter {str(active_chapter.number)}: {active_chapter.name}
+
+                #### 1st Study Topic: {active_chapter.sub_topics[0].sub_topic}
+
+                **Study Material:**
+
+                {active_chapter.sub_topics[0].study_material}"""
+        
+        # Create checkbox updates - all visible
+        checkbox_updates = []
+        for i in range(10):
+            if i < len(_curriculum):
+                checkbox_updates.append(gr.Checkbox(visible=True, value=False))
+            else:
+                checkbox_updates.append(gr.Checkbox(visible=False))
+        
+        # Create button updates - all visible, non-interactive
+        button_updates = []
+        for i in range(10):
+            if i < len(_curriculum):
+                topic = _curriculum[i]
+                button_updates.append(gr.Button(value=topic, visible=True, interactive=False))
+            else:
+                button_updates.append(gr.Button(visible=False))
+        
+        print(Fore.GREEN + f"✓ Loaded new chapter with {len(_curriculum)} topics", Fore.RESET)
+        
+        # Return updated UI components
+        return (checkbox_updates + button_updates + 
+                [gr.Accordion(visible=True),  # study_material_section
+                 gr.Markdown(value=response),  # study_material_display
+                 list(new_unlocked),  # unlocked_topics
+                 list(new_expanded),  # expanded_topics
+                 list(new_completed),  # completed_topics (reset)
+                 gr.Button(visible=False),  # submit_btn (hidden until quiz generated)
+                 gr.Button(visible=False, interactive=False)])  # next_chapter_btn (hidden)
+        
+    except Exception as e:
+        print(Fore.RED + f"Error in go_to_next_chapter: {e}", Fore.RESET)
+        import traceback
+        traceback.print_exc()
+        # Return current state unchanged
+        return ([gr.update() for _ in range(10)] + [gr.update() for _ in range(10)] + 
+                [gr.Accordion(visible=True), gr.Markdown(), unlocked_topics, expanded_topics, completed_topics,
+                 gr.Button(visible=False), gr.Button(visible=False)])
 
 
 def update_button_states(unlocked_topics, expanded_topics, completed_topics, username):
@@ -705,7 +1097,7 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
         # Mark this topic as completed
         new_completed_topics.add(chapter_name)
         ## if pass, then generate & build the next chapter, it's automatically saved
-        new_user_state = move_to_next_chapter(username, save_to)
+        new_user_state = asyncio.run(move_to_next_chapter(username, save_to))
         # Find the next subtopic to unlock
         curriculum = []
         for item in CURRICULUM:
