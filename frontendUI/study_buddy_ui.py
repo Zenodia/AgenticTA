@@ -3,7 +3,6 @@ Study Buddy UI components and logic.
 """
 import sys
 from pathlib import Path
-
 # Add parent directory to path so we can import from root-level modules
 parent_dir = Path(__file__).parent.parent
 if str(parent_dir) not in sys.path:
@@ -109,7 +108,7 @@ def get_curriculum_from_user_state(username:str):
 def generate_curriculum(file_obj, validation_msg , username , preference, study_buddy_name="Ollie",progress=gr.Progress()):
     """Generate curriculum from uploaded PDF or use sample data"""
     global mnt_folder  
-    pdf_loc = os.path.join(mnt_folder, "pdfs")
+    pdf_loc = os.path.join(mnt_folder, "pdfs", username)
     nemo_retriever_processed_pdf_files = os.listdir(pdf_loc)
     save_to = mnt_folder 
     print(Fore.BLUE + "generate_curriculum called with username =", username,"preference=",preference, Fore.RESET)
@@ -289,12 +288,33 @@ def handle_file_upload(files, username, progress=gr.Progress()):
     global mnt_folder  
 
     print(Fore.BLUE + "mnt_folder =", mnt_folder, "username=", username, Fore.RESET)
-    pdf_dir = os.path.join(mnt_folder, "pdfs")
+    pdf_dir = os.path.join(mnt_folder, "pdfs", username)
     user_name_folder=os.path.join(mnt_folder,username)
     os.makedirs(pdf_dir, exist_ok=True)
     os.makedirs(user_name_folder, exist_ok=True)
     new_ls=[shutil.copy(f, pdf_dir) for f in files]
     # Call create collection method
+    print(Fore.YELLOW + "new_ls=\n", new_ls, Fore.RESET)
+    
+    processed_files = os.path.join(mnt_folder,f"{username}_files.txt")
+    my_file = Path(processed_files)
+    exist_processed_files_flag=my_file.is_file()
+    if exist_processed_files_flag:
+        f=open(processed_files,"r+")
+        processed_files_ls= f.readlines()
+        processed_files_ls=[f for f in processed_files_ls if f.endswith(".pdf")]
+        print(Fore.CYAN + " !! skip already processed files  =\n", processed_files_ls)
+        new_files_ls = [ os.path.join(pdf_dir, f) for f in files if f not in processed_files_ls]
+        print("+ = new added files =\n ", new_files_ls, "append to processed files", Fore.RESET)
+        _=[f.write(file) for file in new_files_ls] # python will convert \n to os.linesep
+        f.close()
+    else:
+        f=open(processed_files,"w")
+        _=[f.write(f'{os.path.join(pdf_dir,pdf_file)}\n') for pdf_file in os.listdir(pdf_dir) if pdf_file.endswith(".pdf")] # python will convert \n to os.linesep
+        new_files_ls=[os.path.join(pdf_dir,pdf_file) for pdf_file in os.listdir(pdf_dir) if pdf_file.endswith(".pdf")] # python will convert \n to os.linesep
+        print(Fore.CYAN+" >> newl yadded files =\n ", new_files_ls, "append to processed files")
+        f.close()
+    
     
     # [Optional]: Define schema for metadata fields
     metadata_schema = [    
@@ -325,8 +345,10 @@ def handle_file_upload(files, username, progress=gr.Progress()):
                 metadata_schema=metadata_schema # Optional argument, can be commented if metadata is not to be inserted
             ))
             time.sleep(10)
-            
-    nemo_retriever_files_upload_output = asyncio.run(upload_files_to_nemo_retriever(pdf_dir , username,[]))
+    if len(new_files_ls)>0:
+        nemo_retriever_files_upload_output = asyncio.run(upload_files_to_nemo_retriever(new_files_ls , username,[]))
+    else:
+        print("already processed these files, skipping ... ")
     time.sleep(20)
     print(Fore.BLUE + "Copied files to pdf_dir =", '\n'.join(new_ls), Fore.RESET)
     print(Fore.BLUE + "\n nemo_retriever_files_upload_output =", nemo_retriever_files_upload_output, Fore.RESET)
@@ -358,6 +380,8 @@ def handle_file_upload(files, username, progress=gr.Progress()):
 def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expanded_topics, completed_topics, username, *button_values):
     """Mark a topic as complete/incomplete based on checkbox change"""
     print(Fore.BLUE + f"mark_topic_complete called: checkbox_{checkbox_index}={checkbox_value}, username='{username}'", Fore.RESET)
+    print(Fore.BLUE + f"unlocked_topics={unlocked_topics}, expanded_topics={expanded_topics}, completed_topics={completed_topics}","\n", Fore.RESET)
+    print(button_values)
     
     # Load curriculum from user state
     CURRICULUM = get_curriculum_from_user_state(username)
@@ -442,6 +466,7 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
                             print(Fore.YELLOW + f"Generating quiz with title='{title}', summary='{summary[:50]}...'", Fore.RESET)
                             
                             quizes_ls = get_quiz(title, summary, text_chunk, "")
+                            print(type(quizes_ls), quizes_ls)
                             quizzes_d_ls = quiz_output_parser(quizes_ls)
                             
                             print(Fore.GREEN + f"Generated {len(quizzes_d_ls)} quizzes", Fore.RESET)

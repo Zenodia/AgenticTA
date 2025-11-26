@@ -56,7 +56,8 @@ def get_quiz(title, document_summary, chunk_text, additional_instruction):
     try:
         response = inference_call(QUESTION_GENERATION_SYSTEM_PROMPT_MULTI, user_prompt_str)
         output_d=response.json()
-        output_str= output_d['choices'][0]["message"]["content"]
+        output_str = output_d['choices'][0]["message"]["content"]
+        print("### quiz raw string output =\n", output_str )
     except Exception as exc:
         output_str = "an error happened during inference call, error msg = \n" + str(exc) 
     
@@ -373,7 +374,9 @@ def quiz_output_parser(output_str: str) -> list[dict]:
     
     start_idx = output_str.index(start_marker) + len(start_marker)
     json_str = output_str[start_idx:]
-    
+    if "```json" in json_str :
+        json_quote_index=json_str.index("```json") + 7
+        json_str=json_str[json_quote_index:]
     # Find the end of the JSON content if closing tag exists
     end_marker = '</output_json>'
     if end_marker in json_str:

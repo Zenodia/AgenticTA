@@ -82,7 +82,7 @@ class GlobalState(TypedDict):
     pdf_loc: str  # the location where the pdfs files are uploaded to, default to /workspace/mnt/pdfs/
     save_to: str  # the location to save processed study material, user states and more, default to /workspace/mnt/
     agent_final_output: Union[str, Markdown, list[str], dict, None]    
-    processed_files: Optiona[list[str]]
+    processed_files: Optional[list[str]]
     # List of actions and corresponding observations
     # Here we annotate this with `operator.add` to indicate that operations to
     # this state should be ADDED to the existing values (not overwrite it)

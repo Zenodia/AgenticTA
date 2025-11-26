@@ -99,9 +99,9 @@ async def fetch_collections():
 
 
 
-async def upload_files_to_nemo_retriever(files_loc_path : str , username: str , CUSTOM_METADATA: list[dict] = []): 
+async def upload_files_to_nemo_retriever(files_path_ls : str , username: str , CUSTOM_METADATA: list[dict] = []): 
         # Filepaths
-    files_path_ls = [os.path.join(files_loc_path, f) for f in os.listdir(files_loc_path) if f.endswith('.pdf')]
+    
     # [Optional]: Add filename specific custom metadata
 
     output=await upload_documents(username, files_path_ls, CUSTOM_METADATA)

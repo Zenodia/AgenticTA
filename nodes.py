@@ -642,7 +642,7 @@ async def sub_topic_builder(username,pdf_loc, subject, pdf_f_name):
                 sub_topic=sub_topic,
                 status=Status.NA,
                 study_material=study_material_str,
-                display_markdown = markdown,
+                display_markdown = markdown_str,
                 reference=pdf_f_name,
                 quizzes = [],
                 feedback = []
@@ -836,9 +836,8 @@ async def populate_states_for_user(user: User, pdf_files_loc: str, study_buddy_p
         "user_id": user["user_id"],
         "chat_history": [],
         "next_node_name": "",
-        "pdf_loc": pdf_files_loc,
-        "save_to": "",  # Will be set by run_for_first_time_user
-        processed_files: processed_pdf_files,
+        "pdf_loc": pdf_files_loc,        
+        "processed_files": processed_pdf_files,
         "agent_final_output": None,
         "intermediate_steps": [],
     }
