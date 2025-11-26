@@ -1,7 +1,10 @@
-# Production Dockerfile for AgenticTA
-# Build: docker build -f Dockerfile.prod -t agenticta:latest .
-# Push:  docker tag agenticta:latest nvcr.io/nvstaging/agenticta:latest
-#        docker push nvcr.io/nvstaging/agenticta:latest
+# Production Dockerfile for AgenticTA Frontend
+# Build: docker build -f Dockerfile.prod -t agenticta-frontend:latest .
+#        OR use: ./build-frontend.sh [VERSION]
+# Push:  ./push-frontend.sh [VERSION]
+#        OR use: ./build-and-push-frontend.sh [VERSION]
+#
+# Image registry: artifactory.nvidia.com/it-astra-docker-local/agenticta/frontend
 
 FROM python:3.12-slim
 
@@ -57,6 +60,7 @@ COPY *.py /workspace/
 COPY llm_config.yaml /workspace/
 COPY pytest.ini /workspace/
 COPY logging_config.py /workspace/
+COPY docker-compose.yml /workspace/
 
 # Application modules (internal only)
 # Note: Copying in this order to maximize cache efficiency
@@ -64,6 +68,7 @@ COPY llm/ /workspace/llm/
 COPY scripts/ /workspace/scripts/
 COPY self_refine/ /workspace/self_refine/
 COPY src/ /workspace/src/
+COPY frontendUI/ /workspace/frontendUI/
 
 # Copy vault last to ensure fresh copy (includes token_manager.py, client.py, config.py, etc.)
 COPY vault/ /workspace/vault/
@@ -86,5 +91,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:7860/ || exit 1
 
 # Default command (can be overridden at runtime)
-CMD ["python", "gradioUI.py"]
+CMD ["python", "frontendUI/main.py"]
 
