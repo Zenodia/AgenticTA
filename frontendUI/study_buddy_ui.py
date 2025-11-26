@@ -268,27 +268,66 @@ def generate_curriculum(file_obj, validation_msg , username , preference, study_
     # Build response display from active_chapter
     active_subtopics = active_chapter.get("sub_topics") if isinstance(active_chapter, dict) else active_chapter.sub_topics
     
+    # Find the current subtopic (first incomplete one, or first one if all completed/new)
+    current_subtopic = None
+    current_subtopic_idx = 0
+    
+    if active_subtopics:
+        # First, try to find a subtopic that's NA or STARTED
+        for idx, subtopic in enumerate(active_subtopics):
+            if isinstance(subtopic, dict):
+                status = subtopic.get("status", Status.NA.value)
+                if isinstance(status, Status):
+                    status_value = status.value
+                else:
+                    status_value = status
+            else:
+                status = getattr(subtopic, "status", Status.NA)
+                if isinstance(status, Status):
+                    status_value = status.value
+                else:
+                    status_value = status
+            
+            # If this subtopic is not completed, use it
+            if status_value != Status.COMPLETED.value:
+                current_subtopic = subtopic
+                current_subtopic_idx = idx
+                print(Fore.GREEN + f"Found current subtopic at index {idx}: status={status_value}", Fore.RESET)
+                break
+        
+        # If all are completed or none found, use the first one
+        if current_subtopic is None:
+            current_subtopic = active_subtopics[0]
+            current_subtopic_idx = 0
+            print(Fore.YELLOW + f"All subtopics completed or none found, using first subtopic", Fore.RESET)
+    
     if isinstance(active_chapter, dict):
         chapter_number = active_chapter.get("number", 0)
         chapter_name = active_chapter.get("name", "Unknown")
-        first_subtopic = active_subtopics[0] if active_subtopics else {}
-        first_subtopic_name = first_subtopic.get("sub_topic", "N/A") if isinstance(first_subtopic, dict) else first_subtopic.sub_topic
-        first_study_material = first_subtopic.get("study_material", "No material available") if isinstance(first_subtopic, dict) else first_subtopic.study_material
+        if current_subtopic:
+            current_subtopic_name = current_subtopic.get("sub_topic", "N/A") if isinstance(current_subtopic, dict) else current_subtopic.sub_topic
+            current_study_material = current_subtopic.get("study_material", "No material available") if isinstance(current_subtopic, dict) else current_subtopic.study_material
+        else:
+            current_subtopic_name = "N/A"
+            current_study_material = "No material available"
     else:
         chapter_number = active_chapter.number
         chapter_name = active_chapter.name
-        first_subtopic = active_subtopics[0] if active_subtopics else None
-        first_subtopic_name = first_subtopic.sub_topic if first_subtopic else "N/A"
-        first_study_material = first_subtopic.study_material if first_subtopic else "No material available"
+        if current_subtopic:
+            current_subtopic_name = current_subtopic.sub_topic if current_subtopic else "N/A"
+            current_study_material = current_subtopic.study_material if current_subtopic else "No material available"
+        else:
+            current_subtopic_name = "N/A"
+            current_study_material = "No material available"
     
     response = f"""
             ### Chapter {str(chapter_number)}: {chapter_name}
 
-            #### 1st Study Topic: {first_subtopic_name}
+            #### Study Topic #{current_subtopic_idx + 1}: {current_subtopic_name}
 
             **Study Material:**
 
-            {first_study_material}"""
+            {current_study_material}"""
 
 
     # In a real app, you would extract content from PDF here
@@ -1096,8 +1135,24 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
     if passed:
         # Mark this topic as completed
         new_completed_topics.add(chapter_name)
-        ## if pass, then generate & build the next chapter, it's automatically saved
-        new_user_state = asyncio.run(move_to_next_chapter(username, save_to))
+        
+        # Check if there are more chapters to study by loading user state
+        user_state = load_user_state(username)
+        has_next_chapter = False
+        
+        if user_state and "curriculum" in user_state and len(user_state["curriculum"]) > 0:
+            curriculum_data = user_state["curriculum"][0]
+            next_chapter = curriculum_data.get("next_chapter")
+            # next_chapter is None when there are no more chapters
+            has_next_chapter = next_chapter is not None
+        
+        ## if pass and there are more chapters, then generate & build the next chapter
+        if has_next_chapter:
+            new_user_state = asyncio.run(move_to_next_chapter(username, save_to))
+            print(Fore.LIGHTGREEN_EX + f"✓ Moving to next chapter..." + Fore.RESET)
+        else:
+            print(Fore.GREEN + "🎉 Congratulations! All chapters and subtopics have been completed!" + Fore.RESET)
+        
         # Find the next subtopic to unlock
         curriculum = []
         for item in CURRICULUM:
@@ -1117,7 +1172,7 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
                 next_topic = curriculum[current_idx + 1]
                 if next_topic.startswith("  ↳ "):
                     new_unlocked_topics.add(next_topic)
-            print(Fore.MAGENTA + " current_full_name =\n", current_full_name, "\n next_topic =", next_topic , "\n new_unlocked_topics=", new_unlocked_topics, "\nnew_completed_topics", new_completed_topics, Fore.RESET)
+                print(Fore.MAGENTA + " current_full_name =\n", current_full_name, "\n next_topic =", next_topic , "\n new_unlocked_topics=", new_unlocked_topics, "\nnew_completed_topics", new_completed_topics, Fore.RESET)
         except ValueError:
             pass
         
