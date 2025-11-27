@@ -539,10 +539,66 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
     generated_quiz_data = None
     generated_subtopic_name = None
     
+    # Variable to store study material for display update
+    study_material_markdown = None
+    
     if checkbox_value:
         # Mark as complete
         new_completed.add(topic_name)
         print(Fore.GREEN + f"Marking '{topic_name}' as completed", Fore.RESET)
+        
+        # Update study material display if this is a subtopic
+        if topic_name.startswith("  ↳ "):
+            try:
+                # Load user state
+                u = load_user_state(username)
+                
+                if u and "curriculum" in u and len(u["curriculum"]) > 0:
+                    active_chapter = u["curriculum"][0]["active_chapter"]
+                    
+                    # Strip numbering and arrow from topic name
+                    subtopic_name = topic_name.replace("  ↳ ", "").strip()
+                    subtopic_name = re.sub(r'^\d+:\s*', '', subtopic_name).strip()
+                    
+                    # Get chapter info for display
+                    if isinstance(active_chapter, dict):
+                        chapter_number = active_chapter.get("number", 0)
+                        chapter_name = active_chapter.get("name", "Unknown")
+                    else:
+                        chapter_number = active_chapter.number
+                        chapter_name = active_chapter.name
+                    
+                    # Find the matching subtopic to get its study material
+                    for idx, subtopic in enumerate(active_chapter.sub_topics if isinstance(active_chapter, dict) else active_chapter.sub_topics):
+                        # Handle both dict and object formats
+                        if isinstance(subtopic, dict):
+                            raw_subtopic = subtopic.get("sub_topic", "")
+                            subtopic_study_material = subtopic.get("display_markdown", "No study material available.")
+                        else:
+                            raw_subtopic = subtopic.sub_topic
+                            # Try display_markdown first, fallback to study_material
+                            subtopic_study_material = getattr(subtopic, 'display_markdown', None) or getattr(subtopic, 'study_material', "No study material available.")
+                        
+                        subtopic_text = re.sub(r'^\n?\d+:\s*', '', raw_subtopic.strip()).strip()
+                        
+                        if subtopic_name in subtopic_text or subtopic_text in subtopic_name:
+                            print(Fore.CYAN + f"Found matching subtopic at index {idx} for study material display", Fore.RESET)
+                            
+                            # Format the study material markdown
+                            study_material_markdown = f"""
+### Chapter {str(chapter_number)}: {chapter_name}
+
+#### Study Topic #{idx + 1}: {subtopic_text}
+
+**Study Material:**
+
+{subtopic_study_material}"""
+                            print(Fore.GREEN + f"✓ Study material display updated for subtopic '{subtopic_name}'", Fore.RESET)
+                            break
+            except Exception as e:
+                print(Fore.RED + f"Error updating study material display: {e}", Fore.RESET)
+                import traceback
+                traceback.print_exc()
         
         # Generate quiz if this is a subtopic
         if topic_name.startswith("  ↳ "):
@@ -873,13 +929,20 @@ def mark_topic_complete(checkbox_value, checkbox_index, unlocked_topics, expande
                 gr.Markdown(visible=False)
             ])
     
+    # Prepare study material display update
+    if study_material_markdown:
+        study_material_update = gr.Markdown(value=study_material_markdown)
+    else:
+        study_material_update = gr.update()  # No change
+    
     return (checkbox_updates + button_updates + 
-            [gr.Accordion(visible=quiz_accordion_visible),  # quiz_accordion
+            [study_material_update,  # study_material_display
+             gr.Accordion(visible=quiz_accordion_visible),  # quiz_accordion
              gr.Textbox(value=f"0/{total_questions}" if total_questions > 0 else "0/0", visible=score_visible),  # score_counter
              current_subtopic_name,  # current_chapter
              total_questions]  # total_questions_state
             + quiz_components +  # 20 components (10 radio + 10 markdown)
-            [list(new_unlocked), list(new_completed),
+            [list(new_unlocked), expanded_topics, list(new_completed),
              gr.Button(visible=submit_visible),  # submit_btn
              gr.Button(visible=False, interactive=False)])  # next_chapter_btn (not used)
 
@@ -1215,8 +1278,54 @@ def send_message(message, history, buddy_pref, username):
             # Extract context from user state
             curriculum = user_state["curriculum"][0]
             active_chapter = curriculum.get("active_chapter")
+            next_chapter = curriculum.get("next_chapter")
             
-            if not active_chapter:
+            # Check if user has completed all chapters
+            if next_chapter is None and active_chapter:
+                # User has completed all chapters!
+                user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
+                study_buddy_name = user_state.get("study_buddy_name", "Study Buddy")
+                
+                # Get the last chapter details for context
+                chapter_name = active_chapter.get("name", "Unknown Chapter") if isinstance(active_chapter, dict) else active_chapter.name
+                sub_topics = active_chapter.get("sub_topics", []) if isinstance(active_chapter, dict) else active_chapter.sub_topics
+                
+                # Get last subtopic details for context
+                if sub_topics and len(sub_topics) > 0:
+                    last_subtopic = sub_topics[-1]
+                    sub_topic = last_subtopic.get("sub_topic", "Unknown") if isinstance(last_subtopic, dict) else last_subtopic.sub_topic
+                    study_material = last_subtopic.get("study_material", "No material available.") if isinstance(last_subtopic, dict) else last_subtopic.study_material
+                    list_of_quizzes = last_subtopic.get("quizzes", []) if isinstance(last_subtopic, dict) else last_subtopic.quizzes
+                else:
+                    sub_topic = "General"
+                    study_material = "All curriculum completed."
+                    list_of_quizzes = []
+                
+                # Create a special study material context indicating completion
+                completion_context = f"""🎉 CURRICULUM COMPLETED! 🎉
+
+You have successfully finished all chapters and subtopics in your study plan! This is an outstanding achievement.
+
+The user has completed their entire curriculum. While answering their question, acknowledge their completion and provide helpful, encouraging responses. You can help them review any topics, clarify concepts, or discuss what they've learned.
+
+Last completed chapter: {chapter_name}
+Last completed subtopic: {sub_topic}
+
+Previous study material for reference:
+{study_material}"""
+                
+                # Call study buddy with completion context
+                bot_response = study_buddy_response(
+                    chapter_name=f"✅ All Chapters Completed",
+                    sub_topic=f"Review & Discussion",
+                    study_material=completion_context,
+                    list_of_quizzes=list_of_quizzes,
+                    user_input=message,
+                    study_buddy_name=study_buddy_name,
+                    user_preference=user_preference
+                )
+                
+            elif not active_chapter:
                 bot_response = "Please select a chapter to start studying first!"
             else:
                 # Get chapter details

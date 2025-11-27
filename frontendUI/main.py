@@ -383,11 +383,11 @@ def create_app():
             # Buttons are now non-clickable (interactive=False), so no click handlers needed
             
             # Connect checkboxes for marking completion
-            # Outputs: checkboxes + buttons + quiz accordion + quiz components + states + submit button
+            # Outputs: checkboxes + buttons + study_material_display + quiz accordion + quiz components + states + submit button
             checkbox_outputs = (chapter_checkboxes + chapter_buttons + 
-                              [quiz_accordion, score_counter, current_chapter, total_questions_state] +
+                              [study_material_display, quiz_accordion, score_counter, current_chapter, total_questions_state] +
                               quiz_components + 
-                              [unlocked_topics_state, completed_topics_state, submit_btn, next_chapter_btn])
+                              [unlocked_topics_state, expanded_topics_state, completed_topics_state, submit_btn, next_chapter_btn])
             
             # Helper function to create checkbox handler with correct index
             def make_checkbox_handler(idx):
