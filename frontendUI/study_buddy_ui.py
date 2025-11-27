@@ -1496,10 +1496,10 @@ def submit_username(username):
             ""  # Empty username state
         )
     
-    username = username.strip()
+    username = username.strip().lower()  # Lowercase the username for consistency
     username_html = f'<div style="background: #f0f0f0; padding: 8px 15px; border-radius: 15px; font-weight: bold; color: #2c3e50; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: inline-block; font-size: 14px;">👤 {username}</div>'
     return (
         gr.update(visible=False),  # Hide modal
         gr.update(visible=True, value=username_html),  # Show and display username
-        username  # Store username in state
+        username  # Store username in state (lowercased)
     )

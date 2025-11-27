@@ -7,6 +7,16 @@ It uses LLM-based fact extraction, intelligent routing, and persistent storage.
 Enhanced from: https://github.com/Zenodia/standalone_agent_memory
 - MemoryManager.py: LLM-based extraction and routing
 - utils.py: Conversation history management and summarization
+
+STREAMING COMPATIBILITY:
+- All LLM chains now use astream() instead of ainvoke() for streaming compatibility
+- Based on LangChain Runnables documentation: https://reference.langchain.com/python/langchain_core/runnables/
+- Key changes:
+  * memory_routing: Uses astream() for memory tool selection
+  * query_to_memory_items: Uses astream() for fact extraction with JsonOutputParser
+  * retrieve_with_context_stream: New streaming method for memory retrieval
+  * summarize_history: Now async with astream() support
+  * All chains support both streaming and non-streaming modes transparently
 """
 
 import os
@@ -232,7 +242,7 @@ Remember to strictly follow the rule below:
         ])
         
         self.memory_retriever_chain = (
-            {"context": self.search_recall_memories_sync, "input": RunnablePassthrough()}
+            {"context": RunnableLambda(self.search_recall_memories_sync), "input": RunnablePassthrough()}
             | prompt
             | self.llm
         )
@@ -249,6 +259,7 @@ Remember to strictly follow the rule below:
         Intelligent LLM-based routing to determine memory operations with retry logic.
         
         Based on: https://github.com/Zenodia/standalone_agent_memory/blob/main/MemoryManager.py
+        Uses astream for streaming-compatible execution.
         """
         self.config = config
         self.current_input = query
@@ -271,14 +282,15 @@ Remember to strictly follow the rule below:
         for attempt in range(max_retries):
             try:
                 if self.use_streaming:
-                    async for event in self.choose_memory_tool_chain.astream_events(inputs, version="v1"):
-                        kind = event["event"]
-                        if kind == "on_chat_model_stream":
-                            content = event["data"]["chunk"].content
-                            if content:
-                                output += content
+                    # Use astream for streaming-compatible execution
+                    async for chunk in self.choose_memory_tool_chain.astream(inputs, config=config):
+                        if chunk:
+                            output += str(chunk)
                 else:
-                    output = await self.choose_memory_tool_chain.ainvoke(inputs)
+                    # Fall back to astream even for non-streaming mode (more compatible)
+                    async for chunk in self.choose_memory_tool_chain.astream(inputs, config=config):
+                        if chunk:
+                            output += str(chunk)
                 
                 # Update last call time on success
                 self.last_llm_call_time = time.time()
@@ -316,6 +328,7 @@ Remember to strictly follow the rule below:
         Extract facts from user query using LLM with retry logic.
         
         Based on: https://github.com/Zenodia/standalone_agent_memory/blob/main/MemoryManager.py
+        Uses astream for streaming-compatible execution.
         """
         # Rate limiting: wait if needed
         await self._rate_limit_wait()
@@ -326,15 +339,15 @@ Remember to strictly follow the rule below:
         # Retry logic for rate limits
         for attempt in range(max_retries):
             try:
-                if self.use_streaming:
-                    async for event in self.mem_extract_chain.astream_events(inputs, version="v1"):
-                        kind = event["event"]
-                        if kind == "on_chat_model_stream":
-                            content = event["data"]["chunk"].content
-                            if content:
-                                output += content
-                else:
-                    output = await self.mem_extract_chain.ainvoke(inputs)
+                # Use astream for streaming-compatible execution
+                # JsonOutputParser will handle the final output
+                async for chunk in self.mem_extract_chain.astream(inputs):
+                    if chunk:
+                        # Accumulate chunks - could be partial JSON or dict
+                        if isinstance(chunk, dict):
+                            output = chunk  # JsonOutputParser returns dict directly
+                        else:
+                            output += str(chunk)
                 
                 # Update last call time on success
                 self.last_llm_call_time = time.time()
@@ -474,6 +487,31 @@ Remember to strictly follow the rule below:
             print(Fore.RED + f"Error searching memories: {e}", Fore.RESET)
             return []
     
+    async def retrieve_with_context_stream(self, query: str, config: Optional[dict] = None):
+        """
+        Streaming-compatible memory retrieval with context.
+        
+        Yields chunks of the LLM response with memory context.
+        Uses astream for streaming execution.
+        """
+        # Rate limiting: wait if needed
+        await self._rate_limit_wait()
+        
+        try:
+            # Stream the response
+            async for chunk in self.memory_retriever_chain.astream(query, config=config):
+                if hasattr(chunk, 'content'):
+                    yield chunk.content
+                else:
+                    yield str(chunk)
+            
+            # Update last call time on success
+            self.last_llm_call_time = time.time()
+            
+        except Exception as e:
+            print(Fore.RED + f"Error in streaming memory retrieval: {e}", Fore.RESET)
+            yield f"Error retrieving memories: {str(e)}"
+    
     def save_memory_to_file(self) -> bool:
         """Save all memories to JSON file for persistence."""
         try:
@@ -612,11 +650,12 @@ class MemoryOps:
                 ls.append("System:" + item.content)
         return ls
     
-    def summarize_history(self) -> str:
+    async def summarize_history(self) -> str:
         """
-        Progressively summarize conversation history using LangChain LLM.
+        Progressively summarize conversation history using LangChain LLM with streaming support.
         
         Based on: https://github.com/Zenodia/standalone_agent_memory/blob/main/utils.py
+        Uses astream for streaming-compatible execution.
         """
         if not self.chat_history:
             return ""
@@ -659,7 +698,17 @@ New summary:"""
         summary_chain = (conv_summary_prompt_template | self.llm | StrOutputParser())
         
         try:
-            output = summary_chain.invoke({"summary": self.summary, "conversations": conversations_str})
+            # Rate limiting: wait if needed
+            await self.memory_manager._rate_limit_wait()
+            
+            # Use astream for streaming-compatible execution
+            output = ""
+            async for chunk in summary_chain.astream({"summary": self.summary, "conversations": conversations_str}):
+                if chunk:
+                    output += str(chunk)
+            
+            # Update last call time on success
+            self.memory_manager.last_llm_call_time = time.time()
             
             # StrOutputParser already returns a string
             if not isinstance(output, str):
@@ -728,7 +777,7 @@ New summary:"""
         # Check if we need to summarize (uses LangChain LLM internally)
         turns = self.check_turns()
         if turns > self.number_of_turns:
-            self.summarize_history()
+            await self.summarize_history()
         
         # Recall relevant memories if needed
         recalled_memories = []
@@ -762,6 +811,24 @@ New summary:"""
         if self.summary:
             return f"**Conversation Summary:** {self.summary}"
         return ""
+    
+    async def retrieve_memory_stream(self, query: str, config: Optional[dict] = None):
+        """
+        Stream memory retrieval response.
+        
+        Example usage:
+            async for chunk in memory_ops.retrieve_memory_stream("What did we discuss?"):
+                print(chunk, end="", flush=True)
+        
+        Args:
+            query: User query to search memories for
+            config: Optional LangChain config
+            
+        Yields:
+            String chunks of the response
+        """
+        async for chunk in self.memory_manager.retrieve_with_context_stream(query, config):
+            yield chunk
 
 
 # Singleton instance cache
