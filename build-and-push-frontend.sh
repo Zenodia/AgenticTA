@@ -9,13 +9,15 @@
 
 set -e  # Exit on error
 
+# Parse arguments
+VERSION="${1:-latest}"
+
 # Configuration
 LOCAL_IMAGE_NAME="agenticta-frontend"
 REGISTRY="artifactory.nvidia.com/it-continum"
 REPOSITORY="agenticta"
 IMAGE_NAME="frontend"
 DOCKERFILE="Dockerfile.prod"
-VERSION="${1:-latest}"
 
 # Full image paths
 # Format: artifactory.nvidia.com/it-continum/agenticta/frontend:VERSION
@@ -43,7 +45,9 @@ echo ""
 # ==========================================
 # Step 1: Pre-flight checks
 # ==========================================
-echo -e "${GREEN}🔍 Step 1/6: Pre-flight checks...${NC}"
+TOTAL_STEPS=6
+
+echo -e "${GREEN}🔍 Step 1/$TOTAL_STEPS: Pre-flight checks...${NC}"
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
@@ -84,7 +88,7 @@ echo ""
 # ==========================================
 # Step 2: Build Docker image
 # ==========================================
-echo -e "${GREEN}📦 Step 2/6: Building Docker image...${NC}"
+echo -e "${GREEN}📦 Step 2/$TOTAL_STEPS: Building Docker image...${NC}"
 echo "   Command: docker build -f $DOCKERFILE -t $LOCAL_TAG:$VERSION ."
 echo ""
 
@@ -111,7 +115,7 @@ echo ""
 # ==========================================
 # Step 3: Check Docker authentication
 # ==========================================
-echo -e "${GREEN}🔐 Step 3/6: Checking Docker authentication...${NC}"
+echo -e "${GREEN}🔐 Step 3/$TOTAL_STEPS: Checking Docker authentication...${NC}"
 
 if [ -f ~/.docker/config.json ]; then
     if grep -q "$REGISTRY" ~/.docker/config.json 2>/dev/null; then
@@ -138,7 +142,7 @@ echo ""
 # ==========================================
 # Step 4: Tag image for Artifactory
 # ==========================================
-echo -e "${GREEN}🏷️  Step 4/6: Tagging image for Artifactory...${NC}"
+echo -e "${GREEN}🏷️  Step 4/$TOTAL_STEPS: Tagging image for Artifactory...${NC}"
 echo "   Tagging: $LOCAL_TAG:$VERSION -> $FULL_IMAGE_TAG:$VERSION"
 
 docker tag "$LOCAL_TAG:$VERSION" "$FULL_IMAGE_TAG:$VERSION"
@@ -160,7 +164,7 @@ echo ""
 # ==========================================
 # Step 5: Security checks
 # ==========================================
-echo -e "${GREEN}🔒 Step 5/6: Running security checks...${NC}"
+echo -e "${GREEN}🔒 Step 5/$TOTAL_STEPS: Running security checks...${NC}"
 echo "   Checking image size..."
 SIZE=$(docker images "$LOCAL_TAG:$VERSION" --format "{{.Size}}")
 echo "   Image size: $SIZE"
@@ -190,7 +194,7 @@ echo ""
 # ==========================================
 # Step 6: Push to Artifactory
 # ==========================================
-echo -e "${GREEN}📤 Step 6/6: Pushing to Artifactory...${NC}"
+echo -e "${GREEN}📤 Step 6/$TOTAL_STEPS: Pushing to Artifactory...${NC}"
 echo "   Pushing: $FULL_IMAGE_TAG:$VERSION"
 
 docker push "$FULL_IMAGE_TAG:$VERSION"
@@ -206,6 +210,7 @@ if [ "$VERSION" != "latest" ]; then
 fi
 
 echo ""
+
 echo "=========================================="
 echo -e "${GREEN}✅ SUCCESS!${NC}"
 echo "=========================================="
@@ -216,12 +221,16 @@ if [ "$VERSION" != "latest" ]; then
     echo -e "   ${BLUE}• $FULL_IMAGE_TAG:latest${NC}"
 fi
 echo ""
-echo "To update deployment:"
-echo "   Update values.yaml in agenticta-deploy:"
-echo "     image:"
-echo "       repository: $REGISTRY/$REPOSITORY"
-echo "       name: $IMAGE_NAME"
-echo "       tag: $VERSION"
+
+if [ "$VERSION" != "latest" ]; then
+    echo "Next steps:"
+    echo "  1. Update values.yaml in the agenticta-deploy repository:"
+    echo "     cd ../agenticta-deploy"
+    echo "     ./update-frontend-version.sh $VERSION stg"
+    echo ""
+    echo "  2. ArgoCD will automatically sync the deployment after you push the changes"
+fi
+
 echo ""
 echo "To verify:"
 echo "   docker pull $FULL_IMAGE_TAG:$VERSION"
