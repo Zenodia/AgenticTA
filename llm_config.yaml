@@ -140,6 +140,44 @@ use_cases:
     enable_streaming: true
 
 # ============================================
+# MEMORY CONFIGURATION
+# ============================================
+
+memory:
+  # Embedding model for memory vector search
+  embedding_model: nvidia/nv-embedqa-mistral-7b-v2
+  
+  # Number of conversation turns before summarization
+  max_turns_before_summary: 3
+  
+  # Number of relevant memories to retrieve
+  top_k_memories: 5
+  
+  # Enable memory management
+  enabled: true
+  
+  # Memory routing keywords (for deciding when to search memory)
+  routing_keywords:
+    - what
+    - when
+    - where
+    - who
+    - why
+    - how
+    - did
+    - was
+    - were
+    - have
+    - has
+    - can you remind
+    - remember
+    - earlier
+    - before
+    - previous
+    - last time
+    - we discussed
+
+# ============================================
 # GLOBAL DEFAULTS
 # ============================================
 

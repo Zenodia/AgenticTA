@@ -24,6 +24,7 @@ from nodes import update_and_save_user_state, move_to_next_chapter, update_subto
 from standalone_study_buddy_response import study_buddy_response
 import asyncio
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic, printmd
+from agent_memory import get_memory_ops
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
 from typing import TypedDict, Annotated, Union
@@ -1264,9 +1265,19 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
 
 
 def send_message(message, history, buddy_pref, username):
-    """Handle chat messages with study buddy using AI-powered responses"""
+    """Handle chat messages with study buddy using AI-powered responses with memory"""
     if not message.strip():
         return "", history
+    
+    # Get or create memory ops for this user with rate limiting
+    try:
+        # Use rate_limit_delay to avoid hitting API limits (default 2.0s between LLM calls)
+        # Increase to 3.0 or 5.0 if you frequently hit rate limits
+        memory_ops = get_memory_ops(username, rate_limit_delay=2.0)
+        print(Fore.CYAN + f"✓ Memory system active for user: {username}", Fore.RESET)
+    except Exception as e:
+        print(Fore.YELLOW + f"Memory system unavailable: {e}. Continuing without memory.", Fore.RESET)
+        memory_ops = None
     
     # Load user state to get current context
     try:
@@ -1279,6 +1290,20 @@ def send_message(message, history, buddy_pref, username):
             curriculum = user_state["curriculum"][0]
             active_chapter = curriculum.get("active_chapter")
             next_chapter = curriculum.get("next_chapter")
+            
+            # Get memory context if available
+            memory_context = ""
+            history_summary = ""
+            if memory_ops:
+                try:
+                    memory_context = memory_ops.get_memory_context(message)
+                    history_summary = memory_ops.get_history_summary()
+                    if memory_context:
+                        print(Fore.MAGENTA + f"✓ Added memory context to prompt", Fore.RESET)
+                    if history_summary:
+                        print(Fore.MAGENTA + f"✓ Added conversation summary to prompt", Fore.RESET)
+                except Exception as e:
+                    print(Fore.YELLOW + f"Error getting memory context: {e}", Fore.RESET)
             
             # Check if user has completed all chapters
             if next_chapter is None and active_chapter:
@@ -1312,7 +1337,11 @@ Last completed chapter: {chapter_name}
 Last completed subtopic: {sub_topic}
 
 Previous study material for reference:
-{study_material}"""
+{study_material}
+
+{memory_context}
+
+{history_summary}"""
                 
                 # Call study buddy with completion context
                 bot_response = study_buddy_response(
@@ -1348,19 +1377,72 @@ Previous study material for reference:
                 # Get study buddy preference
                 user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
                 
-                # Call the study buddy response function
+                # Enhance study material with memory context
+                enhanced_study_material = study_material
+                if memory_context:
+                    enhanced_study_material = f"""{study_material}
+
+---
+{memory_context}
+
+{history_summary}"""
                 
+                # Call the study buddy response function with enhanced context
                 bot_response = study_buddy_response(
                     chapter_name=chapter_name,
                     sub_topic=sub_topic,
-                    study_material=study_material,
+                    study_material=enhanced_study_material,
                     list_of_quizzes=list_of_quizzes,
                     user_input=message,
                     study_buddy_name="Study Buddy",
                     user_preference=user_preference
                 )
+        
+        # Process message through memory system (with LLM-based fact extraction & routing)
+        if memory_ops:
+            try:
+                # Process message and response through memory asynchronously
+                # This will:
+                # 1. Extract facts using LLM (with rate limiting)
+                # 2. Route to appropriate memory operation (search_memory or no_operation)
+                # 3. Save memories to JSON file
+                # 4. Summarize conversation every 3 turns
+                
+                # Get chapter name - active_chapter could be Chapter object or dict
+                chapter_name_for_memory = None
+                if active_chapter:
+                    if isinstance(active_chapter, dict):
+                        chapter_name_for_memory = active_chapter.get("name")
+                    else:
+                        chapter_name_for_memory = active_chapter.name if hasattr(active_chapter, 'name') else None
+                
+                memory_result = asyncio.run(
+                    memory_ops.process_message(
+                        message=message,
+                        bot_response=bot_response,
+                        context={
+                            "username": username,
+                            "chapter": chapter_name_for_memory,
+                        }
+                    )
+                )
+                print(Fore.GREEN + f"✓ Memory processed: {memory_result['turns']} turns, {len(memory_result['memory_items'])} items saved", Fore.RESET)
+                print(Fore.CYAN + f"  Memory operation: {memory_result['mem_ops']}", Fore.RESET)
+                if memory_result['recalled_memories']:
+                    print(Fore.MAGENTA + f"  Recalled {len(memory_result['recalled_memories'])} relevant memories", Fore.RESET)
+            except Exception as e:
+                error_msg = str(e)
+                if "429" in error_msg or "Too Many Requests" in error_msg:
+                    print(Fore.YELLOW + f"⚠️  Rate limit encountered during memory processing. Memory will be saved on next message.", Fore.RESET)
+                else:
+                    print(Fore.RED + f"Error processing memory: {e}", Fore.RESET)
+                    import traceback
+                    traceback.print_exc()
+                
     except Exception as e:
         print(Fore.RED + f"Error in send_message: {e}", Fore.RESET)
+        import traceback
+        traceback.print_exc()
         bot_response = "I encountered an error while processing your message. Please try again."
     
     history.append({"role": "user", "content": message})
