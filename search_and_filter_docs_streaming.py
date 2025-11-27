@@ -232,6 +232,7 @@ async def filter_documents_by_file_name(username, query,pdf_file,num_docs):
     except Exception as exc:
             print('generated an exception: %s' % (exc))
             markdown_str=""
+            img_str=""
             flag=False
     return flag, markdown_str, img_str
     
@@ -249,7 +250,7 @@ if __name__ == "__main__":
     print("---"*10)
     
     if flag and markdown_str:
-        if img_str:
+        if img_str :
             
             formatted_markdown_str = markdown.markdown(f'''                
                 {markdown_str}

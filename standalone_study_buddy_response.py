@@ -133,7 +133,7 @@ if __name__ == "__main__":
         help="The query to send to the study buddy.",
     )
     argparser.add_argument("save_to", nargs="?", default="/workspace/mnt/")
-    argparser.add_argument("user_id", nargs="?", default="sofi")
+    argparser.add_argument("user_id", nargs="?", default="jen")
     args = argparser.parse_args()
     user_input=args.query
     save_to=args.save_to
