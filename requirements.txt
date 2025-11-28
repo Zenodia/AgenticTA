@@ -32,3 +32,9 @@ langgraph
 langgraph-checkpoint 
 fastmcp
 openapi-pydantic==0.5.1
+
+## calendar requirements 
+icalendar>=5.0.0
+tkcalendar>=1.6.1
+gradio-flatpickr-calendar>=0.0.3
+pytz>=2023.3

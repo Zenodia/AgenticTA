@@ -21,7 +21,7 @@ from colorama import Fore
 from nemo_retriever_client_utils import delete_collections,fetch_collections, create_collection, upload_files_to_nemo_retriever, get_documents,fetch_rag_context
 from nodes import init_user_storage,user_exists,load_user_state,save_user_state, _save_store, _load_store
 from nodes import update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
-from standalone_study_buddy_response import study_buddy_response
+from standalone_study_buddy_response import study_buddy_response, query_routing, inference_call
 import asyncio
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic, printmd
 from agent_memory import get_memory_ops
@@ -1279,6 +1279,24 @@ def send_message(message, history, buddy_pref, username):
         print(Fore.YELLOW + f"Memory system unavailable: {e}. Continuing without memory.", Fore.RESET)
         memory_ops = None
     
+    # ============= QUERY ROUTING =================
+    # Convert history to chat history format for routing
+    chat_history_str = ""
+    if history:
+        for msg in history[-6:]:  # Last 3 exchanges (6 messages)
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            chat_history_str += f"{role}: {content}\n"
+    
+    # Route the query to determine intent
+    try:
+        print(Fore.CYAN + f"🔀 Routing query: '{message[:50]}...'" + Fore.RESET)
+        route_classification = query_routing(message, chat_history_str).strip().lower()
+        print(Fore.CYAN + f"✓ Query classified as: {route_classification}" + Fore.RESET)
+    except Exception as e:
+        print(Fore.YELLOW + f"⚠️  Routing failed: {e}. Defaulting to study_material." + Fore.RESET)
+        route_classification = "study_material"
+    
     # Load user state to get current context
     try:
         user_state = load_user_state(username)
@@ -1305,8 +1323,90 @@ def send_message(message, history, buddy_pref, username):
                 except Exception as e:
                     print(Fore.YELLOW + f"Error getting memory context: {e}", Fore.RESET)
             
+            # ============= ROUTE BASED ON CLASSIFICATION =================
+            if "chitchat" in route_classification:
+                # Handle chitchat queries with simple, friendly response
+                print(Fore.CYAN + "📢 Using chitchat handler..." + Fore.RESET)
+                
+                # Get user preferences
+                user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
+                study_buddy_name = user_state.get("study_buddy_name", "Study Buddy")
+                
+                # Get chapter context for brief mention
+                if active_chapter:
+                    chapter_name = active_chapter.get("name", "your studies") if isinstance(active_chapter, dict) else active_chapter.name
+                else:
+                    chapter_name = "your studies"
+                
+                # Simple chitchat prompt
+                chitchat_prompt = f"""You are a friendly study assistant named {study_buddy_name}.
+
+Your communication style: {user_preference}
+
+The user is currently studying: {chapter_name}
+
+The user wants to have a casual conversation unrelated to their study material.
+Respond in a brief, friendly, and warm manner (1-2 sentences maximum).
+Gently guide the conversation back to studying if appropriate.
+
+{chat_history_str}
+
+User message: {message}
+
+Response:"""
+                
+                response = inference_call(None, chitchat_prompt)
+                try:
+                    output_d = response.json()
+                    bot_response = output_d['choices'][0]["message"]["content"]
+                    print(Fore.GREEN + "✓ Chitchat response generated" + Fore.RESET)
+                except Exception as exc:
+                    print(Fore.RED + f'Chitchat inference failed: {exc}' + Fore.RESET)
+                    bot_response = "I'm having trouble processing that right now. Want to get back to studying? 😊"
+            
+            elif "supplement" in route_classification:
+                # Handle supplement requests (external resources, videos, etc.)
+                print(Fore.CYAN + "🔗 Using supplement handler..." + Fore.RESET)
+                
+                # TODO: Implement supplement chain with actual YouTube API, resource search, etc.
+                # For now, provide a helpful placeholder response
+                user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
+                study_buddy_name = user_state.get("study_buddy_name", "Study Buddy")
+                
+                supplement_prompt = f"""You are {study_buddy_name}, a helpful study assistant.
+
+Communication style: {user_preference}
+
+The user is requesting supplementary resources or additional learning materials.
+Acknowledge their request warmly and let them know that you can help them with:
+- Understanding concepts from their study materials
+- Explaining topics in different ways
+- Providing examples and analogies
+- Helping with quiz questions
+
+For external resources like YouTube videos, suggest they search for relevant keywords based on their topic.
+
+Keep your response helpful, supportive, and concise (3-4 sentences).
+
+User request: {message}
+
+Response:"""
+                
+                response = inference_call(None, supplement_prompt)
+                try:
+                    output_d = response.json()
+                    bot_response = output_d['choices'][0]["message"]["content"]
+                    print(Fore.GREEN + "✓ Supplement response generated (placeholder)" + Fore.RESET)
+                except Exception as exc:
+                    print(Fore.RED + f'Supplement inference failed: {exc}' + Fore.RESET)
+                    bot_response = "I'd be happy to help you find additional resources! Right now, I can explain concepts from your study materials in different ways. What specifically would you like help with?"
+            
+            else:  # study_material
+                # Handle study material queries with full context (existing implementation)
+                print(Fore.CYAN + "📚 Using study material handler..." + Fore.RESET)
+            
             # Check if user has completed all chapters
-            if next_chapter is None and active_chapter:
+            if next_chapter is None and active_chapter and "study_material" in route_classification:
                 # User has completed all chapters!
                 user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
                 study_buddy_name = user_state.get("study_buddy_name", "Study Buddy")
@@ -1354,9 +1454,9 @@ Previous study material for reference:
                     user_preference=user_preference
                 )
                 
-            elif not active_chapter:
+            elif not active_chapter and "study_material" in route_classification:
                 bot_response = "Please select a chapter to start studying first!"
-            else:
+            elif "study_material" in route_classification:
                 # Get chapter details
                 chapter_name = active_chapter.get("name", "Unknown Chapter") if isinstance(active_chapter, dict) else active_chapter.name
                 

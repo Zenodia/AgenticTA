@@ -102,8 +102,61 @@ def inference_call(system_prompt, user_prompt , astra_api_key=astra_api_key):
     #)
     return response
 
+def query_routing(query, chat_history):
+    ROUTING_PROMPT = """Given the user input below, classify it as either 'chitchat', 'supplement', or 'study_material'.
+    Just use one of these words as your response.
+    
+    'chitchat' - generic chitchat, joking, asking stuff outside of the current study sessions, topics, or materials. 
+    Examples:
+    - tell me a joke
+    - what is my name
+    - what is the weather today
+    - how are you doing
+    - what do you think about politics
+    
+    'supplement' - requests for additional help such as getting relevant YouTube videos, external resources, or supplementary materials related to the study topic.
+    Examples:
+    - can you find a YouTube video about this topic
+    - show me a video on how to cook Kung Pao Chicken
+    - are there any helpful resources online about this
+    - find me additional materials on this subject
+    - recommend some videos or tutorials
+    
+    'study_material' - queries about the current topics, study sessions, study material itself, queries about quiz, learning content, or clarification questions.
+    Examples:
+    - explain this concept to me
+    - what does this mean in the study material
+    - help me understand this quiz question
+    - can you clarify this topic
+    - tell me more about the current chapter
+    - what are the key points of this subtopic
+    - I don't understand this part of the material
+    
+    <END OF EXAMPLES>
+    <CHAT HISTORY>
+    {chat_history}
+    </CHAT HISTORY>
+
+    Do not respond with more than one word.
+        
+    <input>
+    {input}
+    </input>
+    
+    Classification:"""
+    user_prompt_str=ROUTING_PROMPT.format(input=query, chat_history=chat_history)
+    response = inference_call(None, user_prompt_str)
+    try :
+        output_d=response.json()
+        output=output_d['choices'][0]["message"]["content"]
+    except Exception as exc:    
+        print('generated an exception: %s' % (exc))
+        output="unsuccessful llm call"
+    return output
+    
+
 def study_buddy_response(chapter_name, sub_topic , study_material, list_of_quizzes, user_input, study_buddy_name, user_preference ):
-    stringified = json.dumps(list_of_quizzes, ensure_ascii=False, indent=2)
+    stringified = json.dumps(list_of_quizzes, ensure_ascii=False, indent=2)    
     study_buddy_name = study_buddy_name if study_buddy_name else "ollie"
     user_prompt_str = STUDY_BUDDY_SYS_PROMPT.format(
                     study_buddy_name=study_buddy_name,
@@ -123,6 +176,8 @@ def study_buddy_response(chapter_name, sub_topic , study_material, list_of_quizz
         print('generated an exception: %s' % (exc))
         output="unsuccessful llm call"
     return output
+
+
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Standalone Study Buddy Response")
