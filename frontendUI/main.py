@@ -11,6 +11,7 @@ from study_buddy_ui import (
 from quiz_ui import init_quiz, record_answer, next_question, previous_question, submit_quiz
 from colorama import Fore
 import os, sys, json
+import yaml
 
 def check_and_init_quiz(completed_topics, username):
     """Check if quiz should be unlocked and initialize it if so"""
@@ -213,10 +214,20 @@ button:disabled {
     pointer-events: auto !important;
 }
 """
-f=open("/workspace/docker-compose.yml","r")
-yaml_f=yaml.safe_load(f)
+# Use MNT_FOLDER environment variable if set, otherwise fallback to reading docker-compose.yml
 global mnt_folder
-mnt_folder=yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
+mnt_folder = os.environ.get("MNT_FOLDER", None)
+if not mnt_folder:
+    # Fallback: try to read from docker-compose.yml (for backward compatibility)
+    try:
+        f = open("/workspace/docker-compose.yml", "r")
+        yaml_f = yaml.safe_load(f)
+        mnt_folder = yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
+        f.close()
+    except (FileNotFoundError, KeyError, IndexError) as e:
+        # Default fallback if docker-compose.yml doesn't exist or is malformed
+        mnt_folder = "/workspace/mnt"
+        print(Fore.YELLOW + f"Warning: Could not determine mnt_folder from docker-compose.yml, using default: {mnt_folder}", Fore.RESET)
 
 def create_app():
     """Create and configure the Gradio application"""
