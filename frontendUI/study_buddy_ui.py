@@ -22,6 +22,7 @@ from nemo_retriever_client_utils import delete_collections,fetch_collections, cr
 from nodes import init_user_storage,user_exists,load_user_state,save_user_state, _save_store, _load_store
 from nodes import update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
 from standalone_study_buddy_response import study_buddy_response, query_routing, inference_call
+from tool_youtube import fetch_most_relevant_youtube_video
 import asyncio
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic, printmd
 from agent_memory import get_memory_ops
@@ -1366,40 +1367,65 @@ Response:"""
             
             elif "supplement" in route_classification:
                 # Handle supplement requests (external resources, videos, etc.)
-                print(Fore.CYAN + "🔗 Using supplement handler..." + Fore.RESET)
+                print(Fore.CYAN + "🔗 Using supplement handler with YouTube search..." + Fore.RESET)
                 
-                # TODO: Implement supplement chain with actual YouTube API, resource search, etc.
-                # For now, provide a helpful placeholder response
-                user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
-                study_buddy_name = user_state.get("study_buddy_name", "Study Buddy")
+                # Extract keywords from user query for YouTube search
+                # Remove common filler phrases to get clean keywords
+                search_query = message.lower()
                 
-                supplement_prompt = f"""You are {study_buddy_name}, a helpful study assistant.
-
-Communication style: {user_preference}
-
-The user is requesting supplementary resources or additional learning materials.
-Acknowledge their request warmly and let them know that you can help them with:
-- Understanding concepts from their study materials
-- Explaining topics in different ways
-- Providing examples and analogies
-- Helping with quiz questions
-
-For external resources like YouTube videos, suggest they search for relevant keywords based on their topic.
-
-Keep your response helpful, supportive, and concise (3-4 sentences).
-
-User request: {message}
-
-Response:"""
+                # List of common filler phrases to remove
+                filler_phrases = [
+                    "can you find me a video", "can you find a video", "find me a video",
+                    "show me a video", "show me videos", "find videos",
+                    "can you show me", "show me", "find me",
+                    "i want to watch", "i want to see", "i'd like to watch", "i'd like to see",
+                    "could you find", "could you show", "please find", "please show",
+                    "search for a video", "search for videos", "get me a video",
+                    "look for a video", "look for videos",
+                    "about", "on", "regarding", "related to", "for"
+                ]
                 
-                response = inference_call(None, supplement_prompt)
+                # Remove filler phrases
+                for phrase in filler_phrases:
+                    search_query = search_query.replace(phrase, " ")
+                
+                # Clean up extra whitespace
+                search_query = " ".join(search_query.split()).strip()
+                
+                # If query is too short after cleaning, use original message
+                if len(search_query) < 3:
+                    search_query = message
+                
+                # Search YouTube with clean keywords
+                print(Fore.YELLOW + f"🔍 Searching YouTube for keywords: '{search_query}'" + Fore.RESET)
+                top_video = None
                 try:
-                    output_d = response.json()
-                    bot_response = output_d['choices'][0]["message"]["content"]
-                    print(Fore.GREEN + "✓ Supplement response generated (placeholder)" + Fore.RESET)
-                except Exception as exc:
-                    print(Fore.RED + f'Supplement inference failed: {exc}' + Fore.RESET)
-                    bot_response = "I'd be happy to help you find additional resources! Right now, I can explain concepts from your study materials in different ways. What specifically would you like help with?"
+                    top_video = fetch_most_relevant_youtube_video(search_query, search_limit=15)
+                    if top_video:
+                        print(Fore.GREEN + f"✓ Found video: {top_video['title']}" + Fore.RESET)
+                        print(Fore.GREEN + f"  URL: {top_video['url']}" + Fore.RESET)
+                        print(Fore.GREEN + f"  Relevance: {top_video['relevance_score']:.2f}/100" + Fore.RESET)
+                except Exception as e:
+                    print(Fore.RED + f"YouTube search failed: {e}" + Fore.RESET)
+                
+                # Return ONLY the video preview with embed
+                if top_video:
+                    # Extract video ID from URL for embed
+                    video_id = top_video.get('video_id', '')
+                    
+                    # Create embedded video response with minimal text
+                    bot_response = f"""**{top_video['title']}**
+📺 {top_video['channel']} • {top_video['duration']} • {top_video['views_text']}
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+[Open in YouTube]({top_video['url']})"""
+                    
+                    print(Fore.GREEN + f"✓ Video embed created for: {top_video['title']}" + Fore.RESET)
+                else:
+                    # Fallback if YouTube search fails
+                    bot_response = "I couldn't find a relevant video for your request. Try searching YouTube directly, or I can help explain concepts from your study materials. What would you like to know more about?"
+                    print(Fore.YELLOW + "⚠️  No video found" + Fore.RESET)
             
             else:  # study_material
                 # Handle study material queries with full context (existing implementation)

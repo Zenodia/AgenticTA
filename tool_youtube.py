@@ -1,7 +1,9 @@
-from youtubesearchpython import VideosSearch
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
+import sys
+import json
+import subprocess
 
 def parse_view_count(view_text):
     """
@@ -88,6 +90,62 @@ def calculate_text_similarity(text1, text2):
     # Combine both metrics
     return (jaccard * 0.6) + (sequence * 0.4)
 
+def search_youtube_videos(query, search_limit=15):
+    """
+    Search YouTube using yt-dlp (more reliable than youtube-search-python)
+    
+    Args:
+        query: Search query string
+        search_limit: Number of results to fetch (default 15)
+    
+    Returns:
+        List of video dictionaries or empty list if error
+    """
+    try:
+        # Use yt-dlp to search YouTube
+        cmd = [
+            'yt-dlp',
+            f'ytsearch{search_limit}:{query}',
+            '--dump-json',
+            '--no-playlist',
+            '--skip-download'
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode != 0:
+            print(f"yt-dlp error: {result.stderr}")
+            return []
+        
+        # Parse the JSON output (one JSON object per line)
+        videos = []
+        for line in result.stdout.strip().split('\n'):
+            if line.strip():
+                try:
+                    video_data = json.loads(line)
+                    videos.append(video_data)
+                except json.JSONDecodeError:
+                    continue
+        
+        return videos
+    
+    except subprocess.TimeoutExpired:
+        print("YouTube search timed out")
+        return []
+    except FileNotFoundError:
+        print("yt-dlp not found. Please install it: pip install yt-dlp")
+        return []
+    except Exception as e:
+        print(f"Error searching YouTube: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
 def calculate_relevance_score(video, query):
     """
     Calculate relevance score based on multiple factors
@@ -99,24 +157,49 @@ def calculate_relevance_score(video, query):
     - Recency (10% weight)
     """
     # Title similarity (most important)
-    title_similarity = calculate_text_similarity(video['title'], query)
+    title = video.get('title', '')
+    title_similarity = calculate_text_similarity(title, query)
     title_score = title_similarity * 50
     
     # Description similarity
-    description_similarity = calculate_text_similarity(video['description'], query)
+    description = video.get('description', '')
+    description_similarity = calculate_text_similarity(description, query)
     description_score = description_similarity * 20
     
     # View count (normalized, logarithmic scale for fairness)
-    view_count = video['views_count']
-    if view_count > 0:
+    view_count = video.get('view_count', 0)
+    if view_count and view_count > 0:
         # Normalize views on log scale (max around 100M views = score of 20)
         import math
         view_score = min(20, (math.log10(view_count) / 8) * 20)
     else:
         view_score = 0
     
-    # Recency score
-    recency_score = parse_published_time(video['published']) * 0.1
+    # Recency score based on upload date
+    upload_date = video.get('upload_date', '')
+    if upload_date:
+        try:
+            # upload_date is in format YYYYMMDD
+            from datetime import datetime, timedelta
+            upload_dt = datetime.strptime(upload_date, '%Y%m%d')
+            days_ago = (datetime.now() - upload_dt).days
+            
+            if days_ago < 1:
+                recency_score = 10
+            elif days_ago < 7:
+                recency_score = 9
+            elif days_ago < 30:
+                recency_score = 7
+            elif days_ago < 90:
+                recency_score = 5
+            elif days_ago < 365:
+                recency_score = 3
+            else:
+                recency_score = 1
+        except:
+            recency_score = 2
+    else:
+        recency_score = 2
     
     # Total score
     total_score = title_score + description_score + view_score + recency_score
@@ -135,47 +218,40 @@ def fetch_most_relevant_youtube_video(query, search_limit=15):
         Dictionary containing the most relevant video info, or None if no results
     """
     try:
-        # Search for videos
-        videos_search = VideosSearch(query, limit=search_limit)
-        results = videos_search.result()
+        # Search for videos using yt-dlp
+        videos = search_youtube_videos(query, search_limit)
         
-        if not results.get('result'):
+        if not videos:
             return None
         
-        # Extract and enrich video information
-        videos = []
-        for video in results['result']:
-            view_text = video.get('viewCount', {}).get('text', 'N/A')
-            
-            # Extract description snippet
-            description_snippets = video.get('descriptionSnippet', [])
-            description = ' '.join([snippet.get('text', '') for snippet in description_snippets]) if description_snippets else ''
-            
-            video_info = {
-                'title': video.get('title', 'N/A'),
-                'url': video.get('link', 'N/A'),
-                'video_id': video.get('id', 'N/A'),
-                'duration': video.get('duration', 'N/A'),
-                'views_text': view_text,
-                'views_count': parse_view_count(view_text),
-                'published': video.get('publishedTime', 'N/A'),
-                'channel': video.get('channel', {}).get('name', 'N/A'),
-                'thumbnail': video.get('thumbnails', [{}])[0].get('url', 'N/A'),
-                'description': description
-            }
-            
-            # Calculate relevance score
-            video_info['relevance_score'] = calculate_relevance_score(video_info, query)
-            
-            videos.append(video_info)
+        # Calculate relevance scores
+        for video in videos:
+            video['relevance_score'] = calculate_relevance_score(video, query)
         
         # Sort by relevance score (descending) and return top 1
         most_relevant = sorted(videos, key=lambda x: x['relevance_score'], reverse=True)[0]
         
-        return most_relevant
+        # Format the output to match expected interface
+        result = {
+            'title': most_relevant.get('title', 'N/A'),
+            'url': most_relevant.get('webpage_url', most_relevant.get('url', 'N/A')),
+            'video_id': most_relevant.get('id', 'N/A'),
+            'duration': most_relevant.get('duration_string', 'N/A'),
+            'views_text': f"{most_relevant.get('view_count', 0):,} views",
+            'views_count': most_relevant.get('view_count', 0),
+            'published': most_relevant.get('upload_date', 'N/A'),
+            'channel': most_relevant.get('uploader', 'N/A'),
+            'thumbnail': most_relevant.get('thumbnail', 'N/A'),
+            'description': most_relevant.get('description', '')[:500] if most_relevant.get('description') else '',
+            'relevance_score': most_relevant.get('relevance_score', 0)
+        }
+        
+        return result
     
     except Exception as e:
         print(f"Error fetching YouTube videos: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 # Example usage
