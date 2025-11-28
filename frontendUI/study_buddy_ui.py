@@ -1287,6 +1287,36 @@ def send_message(message, history, buddy_pref, username):
         memory_ops = None
     
     # ============= QUERY ROUTING =================
+    # Load user state to get current context and extract chapter info for routing
+    chapter_name_for_routing = None
+    sub_topic_for_routing = None
+    
+    try:
+        user_state = load_user_state(username)
+        if user_state and "curriculum" in user_state and len(user_state["curriculum"]) > 0:
+            # Extract context from user state
+            curriculum = user_state["curriculum"][0]
+            active_chapter = curriculum.get("active_chapter")
+            
+            if active_chapter:
+                # Get chapter name
+                if isinstance(active_chapter, dict):
+                    chapter_name_for_routing = active_chapter.get("name", "Unknown Chapter")
+                    sub_topics = active_chapter.get("sub_topics", [])
+                else:
+                    chapter_name_for_routing = active_chapter.name if hasattr(active_chapter, 'name') else "Unknown Chapter"
+                    sub_topics = active_chapter.sub_topics if hasattr(active_chapter, 'sub_topics') else []
+                
+                # Get first subtopic (or could track current active subtopic)
+                if sub_topics and len(sub_topics) > 0:
+                    first_subtopic = sub_topics[0]
+                    if isinstance(first_subtopic, dict):
+                        sub_topic_for_routing = first_subtopic.get("sub_topic", "Unknown Sub-topic")
+                    else:
+                        sub_topic_for_routing = first_subtopic.sub_topic if hasattr(first_subtopic, 'sub_topic') else "Unknown Sub-topic"
+    except Exception as e:
+        print(Fore.YELLOW + f"⚠️  Failed to load study context for routing: {e}" + Fore.RESET)
+    
     # Convert history to chat history format for routing
     chat_history_str = ""
     if history:
@@ -1295,10 +1325,15 @@ def send_message(message, history, buddy_pref, username):
             content = msg.get("content", "")
             chat_history_str += f"{role}: {content}\n"
     
-    # Route the query to determine intent
+    # Route the query to determine intent with chapter context
     try:
         print(Fore.CYAN + f"🔀 Routing query: '{message[:50]}...'" + Fore.RESET)
-        route_classification = query_routing(message, chat_history_str).strip().lower()
+        route_classification = query_routing(
+            message, 
+            chat_history_str,
+            chapter_name=chapter_name_for_routing,
+            sub_topic=sub_topic_for_routing
+        ).strip().lower()
         print(Fore.CYAN + f"✓ Query classified as: {route_classification}" + Fore.RESET)
     except Exception as e:
         print(Fore.YELLOW + f"⚠️  Routing failed: {e}. Defaulting to study_material." + Fore.RESET)

@@ -157,9 +157,15 @@ def inference_call(system_prompt, user_prompt , astra_api_key=astra_api_key):
     #)
     return response
 
-def query_routing(query, chat_history):
+def query_routing(query, chat_history, chapter_name=None, sub_topic=None):
     ROUTING_PROMPT = """Given the user input below, classify it as either 'chitchat', 'supplement', 'book_calendar', or 'study_material'.
     Just use one of these words as your response.
+    
+    ### Current Study Context (DO NOT classify these as supplement):
+    - Current Chapter: {chapter_name}
+    - Current Sub-topic: {sub_topic}
+    
+    ### Classification Rules:
     
     'chitchat' - generic chitchat, joking, asking stuff outside of the current study sessions, topics, or materials. 
     Examples:
@@ -169,13 +175,24 @@ def query_routing(query, chat_history):
     - how are you doing
     - what do you think about politics
     
-    'supplement' - requests for additional help such as getting relevant YouTube videos, external resources, or supplementary materials related to the study topic.
-    Examples:
+    'supplement' - ONLY classify as 'supplement' if the user EXPLICITLY mentions "video", "youtube", "url", "link", "watch", "tutorial", "clip", or similar video/external resource terms.
+    Queries about the current study topic WITHOUT these keywords should be classified as 'study_material' instead.
+    Examples of 'supplement':
     - can you find a YouTube video about this topic
     - show me a video on how to cook Kung Pao Chicken
-    - are there any helpful resources online about this
-    - find me additional materials on this subject
-    - recommend some videos or tutorials
+    - are there any helpful videos online about this
+    - find me a tutorial video on this subject
+    - recommend some YouTube videos or tutorials
+    - I want to watch a video about this
+    - can you give me a link to learn more
+    - show me a clip explaining this concept
+    
+    Examples that should NOT be 'supplement' (these are 'study_material'):
+    - tell me about Chinese cuisine (if Chinese cuisine is the current topic)
+    - explain Kung Pao Chicken (if Chinese cuisine is the current chapter)
+    - what is {chapter_name}
+    - tell me more about {sub_topic}
+    - I want to learn about this topic
     
     'book_calendar' - requests to schedule, reserve, book, or set up calendar events for study sessions, exams, deadlines, or any time-based planning.
     Examples:
@@ -189,6 +206,7 @@ def query_routing(query, chat_history):
     - create an event for the final exam on December 15th
     
     'study_material' - queries about the current topics, study sessions, study material itself, queries about quiz, learning content, or clarification questions.
+    This includes ANY questions about the current chapter "{chapter_name}" or sub-topic "{sub_topic}" that do NOT explicitly request external videos/resources.
     Examples:
     - explain this concept to me
     - what does this mean in the study material
@@ -197,6 +215,9 @@ def query_routing(query, chat_history):
     - tell me more about the current chapter
     - what are the key points of this subtopic
     - I don't understand this part of the material
+    - tell me about {chapter_name}
+    - explain {sub_topic}
+    - what is {chapter_name}
     
     <END OF EXAMPLES>
     <CHAT HISTORY>
@@ -210,7 +231,12 @@ def query_routing(query, chat_history):
     </input>
     
     Classification:"""
-    user_prompt_str=ROUTING_PROMPT.format(input=query, chat_history=chat_history)
+    user_prompt_str=ROUTING_PROMPT.format(
+        input=query, 
+        chat_history=chat_history,
+        chapter_name=chapter_name if chapter_name else "Unknown Topic",
+        sub_topic=sub_topic if sub_topic else "Unknown Sub-topic"
+    )
     response = inference_call(None, user_prompt_str)
     try :
         output_d=response.json()
