@@ -4,20 +4,46 @@ import json
 import re
 import base64
 import random
+import ssl
 from typing import List
 
-IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" #Replace this with the correct IP address
-RAG_SERVER_PORT = "8081"
-RAG_BASE_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
+# Use RAG_SERVER_HOST environment variable if set, otherwise fallback to hardcoded values
+RAG_SERVER_HOST = os.environ.get("RAG_SERVER_HOST", None)
+if RAG_SERVER_HOST:
+    RAG_IPADDRESS = RAG_SERVER_HOST
+else:
+    RAG_IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost"
+RAG_SERVER_PORT = os.environ.get("RAG_SERVER_PORT", "8081")
+# Use https:// for port 443 (HTTPS), http:// otherwise
+RAG_PROTOCOL = "https" if RAG_SERVER_PORT == "443" else "http"
+RAG_BASE_URL = f"{RAG_PROTOCOL}://{RAG_IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
 
+# Use INGESTOR_SERVER_HOST environment variable if set, otherwise fallback to hardcoded values
+INGESTOR_SERVER_HOST = os.environ.get("INGESTOR_SERVER_HOST", None)
+if INGESTOR_SERVER_HOST:
+    INGESTOR_IPADDRESS = INGESTOR_SERVER_HOST
+else:
+    INGESTOR_IPADDRESS = "ingestor-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost"
+INGESTOR_SERVER_PORT = os.environ.get("INGESTOR_SERVER_PORT", "8082")
+# Use https:// for port 443 (HTTPS), http:// otherwise
+INGESTOR_PROTOCOL = "https" if INGESTOR_SERVER_PORT == "443" else "http"
+BASE_URL = f"{INGESTOR_PROTOCOL}://{INGESTOR_IPADDRESS}:{INGESTOR_SERVER_PORT}"  # Replace with your server URL
 
-IPADDRESS = "ingestor-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" # Replace this with the correct IP address
-INGESTOR_SERVER_PORT = "8082"
-BASE_URL = f"http://{IPADDRESS}:{INGESTOR_SERVER_PORT}"  # Replace with your server URL
+# SSL context for HTTPS connections (disable verification for self-signed certs like Astra ingress)
+def get_ssl_context():
+    """Get SSL context for HTTPS connections, disabling verification for self-signed certs"""
+    if INGESTOR_PROTOCOL == "https" or RAG_PROTOCOL == "https":
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        return ssl_context
+    return None
 
 async def delete_collections(collection_names: List[str] = ""):
     url = f"{BASE_URL}/v1/collections"
-    async with aiohttp.ClientSession() as session:
+    ssl_context = get_ssl_context()
+    connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+    async with aiohttp.ClientSession(connector=connector) as session:
         try:
             async with session.delete(url, json=collection_names) as response:
                 await print_response(response)
@@ -39,7 +65,9 @@ async def create_collection(
 
     HEADERS = {"Content-Type": "application/json"}
 
-    async with aiohttp.ClientSession() as session:
+    ssl_context = get_ssl_context()
+    connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+    async with aiohttp.ClientSession(connector=connector) as session:
         try:
             async with session.post(f"{BASE_URL}/v1/collection", json=data, headers=HEADERS) as response:
                 await print_response(response)
@@ -76,7 +104,9 @@ async def upload_documents(collection_name: str = "", files_path_ls:list[str] = 
 
     form_data.add_field("data", json.dumps(data), content_type="application/json")
 
-    async with aiohttp.ClientSession() as session:
+    ssl_context = get_ssl_context()
+    connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+    async with aiohttp.ClientSession(connector=connector) as session:
         try:
             async with session.post(f"{BASE_URL}/v1/documents", data=form_data) as response: # Replace with session.patch for reingesting
                 await print_response(response)
@@ -85,7 +115,9 @@ async def upload_documents(collection_name: str = "", files_path_ls:list[str] = 
 
 async def fetch_collections():
     url = f"{BASE_URL}/v1/collections"
-    async with aiohttp.ClientSession() as session:
+    ssl_context = get_ssl_context()
+    connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+    async with aiohttp.ClientSession(connector=connector) as session:
         try:
             async with session.get(url) as response:
                 output = await print_response(response)
@@ -124,7 +156,9 @@ async def fetch_health_status():
     url = f"{RAG_BASE_URL}/v1/health"
     print("Fetching RAG server health status with url = ", url)
     params = {"check_dependencies": "True"} # Check health of dependencies as well
-    async with aiohttp.ClientSession() as session:
+    ssl_context = get_ssl_context()
+    connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+    async with aiohttp.ClientSession(connector=connector) as session:
         async with session.get(url, params=params) as response:
             await print_response(response)
 
@@ -132,7 +166,9 @@ async def fetch_health_status():
 #await fetch_health_status()
 ## helpful function to quickly get documents
 async def document_search(payload, url):
-    async with aiohttp.ClientSession() as session:
+    ssl_context = get_ssl_context()
+    connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+    async with aiohttp.ClientSession(connector=connector) as session:
         try:
             async with session.post(url=url, json=payload) as response:
                 output = await print_response(response)

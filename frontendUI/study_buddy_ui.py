@@ -45,10 +45,20 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 from standalone_quizes_gen import get_quiz, quiz_output_parser
-f=open("/workspace/docker-compose.yml","r")
-yaml_f=yaml.safe_load(f)
+# Use MNT_FOLDER environment variable if set, otherwise fallback to reading docker-compose.yml
 global mnt_folder
-mnt_folder=yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
+mnt_folder = os.environ.get("MNT_FOLDER", None)
+if not mnt_folder:
+    # Fallback: try to read from docker-compose.yml (for backward compatibility)
+    try:
+        f = open("/workspace/docker-compose.yml", "r")
+        yaml_f = yaml.safe_load(f)
+        mnt_folder = yaml_f["services"]["agenticta"]["volumes"][-1].split(":")[-1]
+        f.close()
+    except (FileNotFoundError, KeyError, IndexError) as e:
+        # Default fallback if docker-compose.yml doesn't exist or is malformed
+        mnt_folder = "/workspace/mnt"
+        print(Fore.YELLOW + f"Warning: Could not determine mnt_folder from docker-compose.yml, using default: {mnt_folder}", Fore.RESET)
 
 start_fresh=False
 

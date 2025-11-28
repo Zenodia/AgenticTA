@@ -3,6 +3,7 @@ import asyncio
 import aiohttp
 import json
 import requests
+import ssl
 from colorama import Fore
 import argparse
 import base64
@@ -27,10 +28,26 @@ def printmd(markdown_str):
 
 
 
-IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost" #Replace this with the correct IP address
-RAG_SERVER_PORT = "8081"
-RAG_BASE_URL = f"http://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
+# Use RAG_SERVER_HOST environment variable if set, otherwise fallback to hardcoded values
+RAG_SERVER_HOST = os.environ.get("RAG_SERVER_HOST", None)
+if RAG_SERVER_HOST:
+    IPADDRESS = RAG_SERVER_HOST
+else:
+    IPADDRESS = "rag-server" if os.environ.get("AI_WORKBENCH", "false") == "true" else "localhost"
+RAG_SERVER_PORT = os.environ.get("RAG_SERVER_PORT", "8081")
+# Use https:// for port 443 (HTTPS), http:// otherwise
+RAG_PROTOCOL = "https" if RAG_SERVER_PORT == "443" else "http"
+RAG_BASE_URL = f"{RAG_PROTOCOL}://{IPADDRESS}:{RAG_SERVER_PORT}"  # Replace with your server URL
 
+# SSL context for HTTPS connections (disable verification for self-signed certs like Astra ingress)
+def get_ssl_context():
+    """Get SSL context for HTTPS connections, disabling verification for self-signed certs"""
+    if RAG_PROTOCOL == "https":
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        return ssl_context
+    return None
 
 async def print_response(response):
     """Helper to print API response."""
@@ -51,7 +68,9 @@ async def print_response(response):
 async def document_seach(payload, url):
     """Search documents using RAG server."""
     try:
-        async with aiohttp.ClientSession() as session:
+        ssl_context = get_ssl_context()
+        connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(url=url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 response.raise_for_status()
                 output = await print_response(response)
