@@ -9,6 +9,7 @@ from study_buddy_ui import (
     clear_feedback, check_quiz_unlock, submit_username, go_to_next_chapter
 )
 from quiz_ui import init_quiz, record_answer, next_question, previous_question, submit_quiz
+from calendar_assistant import create_event_with_ai
 from colorama import Fore
 import os, sys, json
 
@@ -254,6 +255,8 @@ def create_app():
             unlocked_topics_state = gr.State([])
             expanded_topics_state = gr.State([])
             completed_topics_state = gr.State([])
+            # State for calendar events created from chat
+            calendar_event_state = gr.State(None)
             
             with gr.Row():
                 with gr.Column(scale=1):
@@ -283,6 +286,51 @@ def create_app():
                     buddy_pref = gr.Textbox(
                         label="Preferred Study Buddy Characteristics",
                         placeholder="E.g., encouraging, knowledgeable in science..."
+                    )
+                    
+                    # Calendar Assistant Integration
+                    gr.Markdown("## 📅 Quick Calendar Event")
+                    calendar_accordion = gr.Accordion("Create Calendar Event with AI", open=False)
+                    with calendar_accordion:
+                        gr.Markdown("""
+                        **Quickly create study-related calendar events using natural language!**
+                        
+                        Examples: *"Study session tomorrow at 3pm for 2 hours"* or *"Exam on Friday at 9am"*
+                        """)
+                        
+                        calendar_ai_input = gr.Textbox(
+                            label="Describe Your Event",
+                            placeholder="e.g., Study session for Biology next Monday at 2pm for 90 minutes",
+                            lines=2
+                        )
+                        
+                        calendar_create_btn = gr.Button("🚀 Create Event", variant="secondary", size="sm")
+                        
+                        calendar_status = gr.Markdown("", visible=False)
+                        calendar_download = gr.File(label="📥 Download .ics File", visible=False)
+                        
+                        with gr.Accordion("👁️ Event Preview", open=False):
+                            calendar_preview = gr.Textbox(
+                                label="ICS File Content",
+                                lines=8,
+                                max_lines=12,
+                                show_copy_button=True,
+                                visible=False
+                            )
+                    
+                    # Connect calendar event handler
+                    def handle_calendar_event(ai_input):
+                        file_path, status, preview = create_event_with_ai(ai_input)
+                        return (
+                            gr.Markdown(value=status, visible=True),
+                            gr.File(value=file_path, visible=True if file_path else False),
+                            gr.Textbox(value=preview, visible=True if preview else False)
+                        )
+                    
+                    calendar_create_btn.click(
+                        fn=handle_calendar_event,
+                        inputs=[calendar_ai_input],
+                        outputs=[calendar_status, calendar_download, calendar_preview]
                     )
                 
                 with gr.Column(scale=2):
@@ -420,9 +468,42 @@ def create_app():
                 outputs=next_chapter_outputs
             )
             
-            # Chat functionality
-            msg.submit(send_message, [msg, chatbot, buddy_pref, username_state], [msg, chatbot])
-            send_btn.click(send_message, [msg, chatbot, buddy_pref, username_state], [msg, chatbot])
+            # Chat functionality with calendar component updates
+            def send_message_with_calendar(msg_text, history, pref, user):
+                """Wrapper that handles chat and calendar UI updates"""
+                # Call the original send_message which now returns calendar data
+                new_msg, new_history, cal_file, cal_status, cal_preview = send_message(msg_text, history, pref, user)
+                
+                # If calendar event was created, update sidebar components
+                if cal_file and cal_status:
+                    print(f"Updating calendar UI with file: {cal_file}")
+                    return (
+                        new_msg,
+                        new_history,
+                        gr.Markdown(value=cal_status, visible=True),
+                        gr.File(value=cal_file, visible=True),
+                        gr.Textbox(value=cal_preview if cal_preview else "", visible=True if cal_preview else False)
+                    )
+                
+                # Default: no calendar update
+                return (
+                    new_msg,
+                    new_history,
+                    gr.Markdown(visible=False),
+                    gr.File(visible=False),
+                    gr.Textbox(visible=False)
+                )
+            
+            msg.submit(
+                send_message_with_calendar,
+                [msg, chatbot, buddy_pref, username_state],
+                [msg, chatbot, calendar_status, calendar_download, calendar_preview]
+            )
+            send_btn.click(
+                send_message_with_calendar,
+                [msg, chatbot, buddy_pref, username_state],
+                [msg, chatbot, calendar_status, calendar_download, calendar_preview]
+            )
             
             # Feedback functionality
             feedback_submit_btn.click(
@@ -478,6 +559,108 @@ def create_app():
                 
                 # Initialize quiz when user accesses the quiz tab (after curriculum is generated)
                 # Removed demo.load to avoid initialization errors for first-time users
+        
+        with gr.Tab("📅 Calendar Assistant"):
+            gr.Markdown("""
+            # 📅 AI Calendar Assistant
+            
+            Create calendar events using natural language! Describe your event and let AI parse the details.
+            Download the generated `.ics` file to add to your calendar app.
+            """)
+            
+            with gr.Row():
+                with gr.Column(scale=2):
+                    gr.Markdown("""
+                    ### Use natural language to create events
+                    
+                    Describe your event in plain English and let AI parse the details!
+                    
+                    **Examples:**
+                    - "Schedule a team meeting tomorrow at 2pm for 2 hours"
+                    - "Create a dentist appointment on December 5th at 10:30am"
+                    - "Add project deadline next Friday at 5pm"
+                    
+                    **Note:** Using API key from environment variable `NVIDIA_API_KEY`
+                    """)
+                    
+                    ai_input = gr.Textbox(
+                        label="📝 Describe Your Event",
+                        placeholder="e.g., Schedule a study session next Tuesday at 3pm for 90 minutes",
+                        lines=4
+                    )
+                    
+                    ai_examples = gr.Examples(
+                        examples=[
+                            ["Schedule a study session tomorrow at 9am for 2 hours"],
+                            ["Create a homework deadline on December 15th at 11:59pm"],
+                            ["Add exam preparation on Monday at 3pm for 3 hours"],
+                            ["Book lab session for next Wednesday 2-4pm"],
+                        ],
+                        inputs=ai_input
+                    )
+                    
+                    ai_create_btn = gr.Button("🚀 Create Event with AI", variant="primary", size="lg")
+                
+                with gr.Column(scale=1):
+                    ai_status = gr.Markdown("ℹ️ Enter your event description above")
+                    ai_download = gr.File(label="📥 Download .ics File", visible=True)
+                    
+                    with gr.Accordion("👁️ ICS Preview", open=False):
+                        ai_preview = gr.Textbox(
+                            label="ICS File Content",
+                            lines=15,
+                            max_lines=20,
+                            show_copy_button=True
+                        )
+            
+            # Connect AI assistant
+            ai_create_btn.click(
+                fn=create_event_with_ai,
+                inputs=[ai_input],
+                outputs=[ai_download, ai_status, ai_preview]
+            )
+            
+            # Help section
+            gr.Markdown("""
+            ---
+            
+            ## 📥 How to Import to Your Calendar
+            
+            ### 🎯 EASIEST METHOD - Just Double-Click!
+            
+            After downloading the `.ics` file:
+            1. Go to your **Downloads** folder
+            2. Find the `.ics` file (named like `event_Study_Session_20241128_123456.ics`)
+            3. **Double-click** the file
+            4. Your default calendar app (Outlook, Calendar) will open automatically
+            5. Click **Save** or **Add to Calendar** in the prompt
+            
+            **That's it!** The event is now in your calendar.
+            
+            ---
+            
+            ### Alternative Methods
+            
+            **Google Calendar:**
+            1. Open [Google Calendar](https://calendar.google.com/)
+            2. Click the **gear icon** → **Settings**
+            3. Select **Import & Export** from the left menu
+            4. Click **Select file from your computer**
+            5. Choose your downloaded .ics file and click **Import**
+            
+            **Microsoft Outlook:**
+            1. Open Outlook → **File** → **Open & Export** → **Import/Export**
+            2. Select **Import an iCalendar (.ics) or vCalendar file**
+            3. Browse to your .ics file and click **OK**
+            
+            **Apple Calendar (macOS):**
+            1. Open Calendar app → **File** → **Import**
+            2. Select your .ics file and choose which calendar to add it to
+            
+            ---
+            
+            💡 **Tip:** You can create multiple events - just download each .ics file separately and import them all!
+            """)
         
         # Username submission event handler
         username_submit_btn.click(

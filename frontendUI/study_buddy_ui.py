@@ -21,7 +21,9 @@ from colorama import Fore
 from nemo_retriever_client_utils import delete_collections,fetch_collections, create_collection, upload_files_to_nemo_retriever, get_documents,fetch_rag_context
 from nodes import init_user_storage,user_exists,load_user_state,save_user_state, _save_store, _load_store
 from nodes import update_and_save_user_state, move_to_next_chapter, update_subtopic_status,add_quiz_to_subtopic, build_next_chapter, run_for_first_time_user
-from standalone_study_buddy_response import study_buddy_response
+from standalone_study_buddy_response import study_buddy_response, query_routing, inference_call
+from tool_youtube import fetch_most_relevant_youtube_video
+from calendar_assistant import create_event_with_ai
 import asyncio
 from states import Chapter, StudyPlan, Curriculum, User, GlobalState, Status, SubTopic, printmd
 from agent_memory import get_memory_ops
@@ -1267,7 +1269,12 @@ def check_answers(chapter_name, total_questions, unlocked_topics, expanded_topic
 def send_message(message, history, buddy_pref, username):
     """Handle chat messages with study buddy using AI-powered responses with memory"""
     if not message.strip():
-        return "", history
+        return "", history, None, None, None
+    
+    # Initialize calendar data (will be populated if calendar route is taken)
+    calendar_file_path = None
+    calendar_status_msg = None
+    calendar_preview_text = None
     
     # Get or create memory ops for this user with rate limiting
     try:
@@ -1278,6 +1285,59 @@ def send_message(message, history, buddy_pref, username):
     except Exception as e:
         print(Fore.YELLOW + f"Memory system unavailable: {e}. Continuing without memory.", Fore.RESET)
         memory_ops = None
+    
+    # ============= QUERY ROUTING =================
+    # Load user state to get current context and extract chapter info for routing
+    chapter_name_for_routing = None
+    sub_topic_for_routing = None
+    
+    try:
+        user_state = load_user_state(username)
+        if user_state and "curriculum" in user_state and len(user_state["curriculum"]) > 0:
+            # Extract context from user state
+            curriculum = user_state["curriculum"][0]
+            active_chapter = curriculum.get("active_chapter")
+            
+            if active_chapter:
+                # Get chapter name
+                if isinstance(active_chapter, dict):
+                    chapter_name_for_routing = active_chapter.get("name", "Unknown Chapter")
+                    sub_topics = active_chapter.get("sub_topics", [])
+                else:
+                    chapter_name_for_routing = active_chapter.name if hasattr(active_chapter, 'name') else "Unknown Chapter"
+                    sub_topics = active_chapter.sub_topics if hasattr(active_chapter, 'sub_topics') else []
+                
+                # Get first subtopic (or could track current active subtopic)
+                if sub_topics and len(sub_topics) > 0:
+                    first_subtopic = sub_topics[0]
+                    if isinstance(first_subtopic, dict):
+                        sub_topic_for_routing = first_subtopic.get("sub_topic", "Unknown Sub-topic")
+                    else:
+                        sub_topic_for_routing = first_subtopic.sub_topic if hasattr(first_subtopic, 'sub_topic') else "Unknown Sub-topic"
+    except Exception as e:
+        print(Fore.YELLOW + f"⚠️  Failed to load study context for routing: {e}" + Fore.RESET)
+    
+    # Convert history to chat history format for routing
+    chat_history_str = ""
+    if history:
+        for msg in history[-6:]:  # Last 3 exchanges (6 messages)
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            chat_history_str += f"{role}: {content}\n"
+    
+    # Route the query to determine intent with chapter context
+    try:
+        print(Fore.CYAN + f"🔀 Routing query: '{message[:50]}...'" + Fore.RESET)
+        route_classification = query_routing(
+            message, 
+            chat_history_str,
+            chapter_name=chapter_name_for_routing,
+            sub_topic=sub_topic_for_routing
+        ).strip().lower()
+        print(Fore.CYAN + f"✓ Query classified as: {route_classification}" + Fore.RESET)
+    except Exception as e:
+        print(Fore.YELLOW + f"⚠️  Routing failed: {e}. Defaulting to study_material." + Fore.RESET)
+        route_classification = "study_material"
     
     # Load user state to get current context
     try:
@@ -1305,8 +1365,188 @@ def send_message(message, history, buddy_pref, username):
                 except Exception as e:
                     print(Fore.YELLOW + f"Error getting memory context: {e}", Fore.RESET)
             
+            # ============= ROUTE BASED ON CLASSIFICATION =================
+            if "chitchat" in route_classification:
+                # Handle chitchat queries with simple, friendly response
+                print(Fore.CYAN + "📢 Using chitchat handler..." + Fore.RESET)
+                
+                # Get user preferences
+                user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
+                study_buddy_name = user_state.get("study_buddy_name", "Study Buddy")
+                
+                # Get chapter context for brief mention
+                if active_chapter:
+                    chapter_name = active_chapter.get("name", "your studies") if isinstance(active_chapter, dict) else active_chapter.name
+                else:
+                    chapter_name = "your studies"
+                
+                # Simple chitchat prompt
+                chitchat_prompt = f"""You are a friendly study assistant named {study_buddy_name}.
+
+Your communication style: {user_preference}
+
+The user is currently studying: {chapter_name}
+
+The user wants to have a casual conversation unrelated to their study material.
+Respond in a brief, friendly, and warm manner (1-2 sentences maximum).
+Gently guide the conversation back to studying if appropriate.
+
+{chat_history_str}
+
+User message: {message}
+
+Response:"""
+                
+                response = inference_call(None, chitchat_prompt)
+                try:
+                    output_d = response.json()
+                    bot_response = output_d['choices'][0]["message"]["content"]
+                    print(Fore.GREEN + "✓ Chitchat response generated" + Fore.RESET)
+                except Exception as exc:
+                    print(Fore.RED + f'Chitchat inference failed: {exc}' + Fore.RESET)
+                    bot_response = "I'm having trouble processing that right now. Want to get back to studying? 😊"
+            
+            elif "supplement" in route_classification:
+                # Handle supplement requests (external resources, videos, etc.)
+                print(Fore.CYAN + "🔗 Using supplement handler with YouTube search..." + Fore.RESET)
+                
+                # Extract keywords from user query using LLM for better accuracy
+                print(Fore.YELLOW + "🤖 Extracting keywords with LLM..." + Fore.RESET)
+                keyword_extraction_prompt = f"""Extract the core search keywords from this user request for a YouTube search. 
+Return ONLY the essential keywords or topic phrase, nothing else. Remove filler words like "find me", "show me", "video about", etc.
+
+User request: "{message}"
+
+Essential keywords:"""
+                
+                try:
+                    response = inference_call(None, keyword_extraction_prompt)
+                    output_d = response.json()
+                    search_query = output_d['choices'][0]["message"]["content"].strip()
+                    # Remove quotes if LLM added them
+                    search_query = search_query.strip('"').strip("'").strip()
+                    print(Fore.GREEN + f"✓ Extracted keywords: '{search_query}'" + Fore.RESET)
+                except Exception as e:
+                    # Fallback to simple extraction if LLM fails
+                    print(Fore.YELLOW + f"⚠️  LLM extraction failed, using fallback: {e}" + Fore.RESET)
+                    search_query = message.lower()
+                    filler_phrases = [
+                        "can you find me a video", "can you find a video", "find me a video",
+                        "show me a video", "show me videos", "find videos",
+                        "can you show me", "show me", "find me",
+                        "i want to watch", "i want to see", "i'd like to watch", "i'd like to see",
+                        "could you find", "could you show", "please find", "please show",
+                        "search for a video", "search for videos", "get me a video",
+                        "look for a video", "look for videos",
+                        "about", "on", "regarding", "related to", "for"
+                    ]
+                    for phrase in filler_phrases:
+                        search_query = search_query.replace(phrase, " ")
+                    search_query = " ".join(search_query.split()).strip()
+                    if len(search_query) < 3:
+                        search_query = message
+                
+                # Search YouTube with clean keywords
+                print(Fore.YELLOW + f"🔍 Searching YouTube for keywords: '{search_query}'" + Fore.RESET)
+                top_video = None
+                try:
+                    top_video = fetch_most_relevant_youtube_video(search_query, search_limit=15)
+                    if top_video:
+                        print(Fore.GREEN + f"✓ Found video: {top_video['title']}" + Fore.RESET)
+                        print(Fore.GREEN + f"  URL: {top_video['url']}" + Fore.RESET)
+                        print(Fore.GREEN + f"  Relevance: {top_video['relevance_score']:.2f}/100" + Fore.RESET)
+                except Exception as e:
+                    print(Fore.RED + f"YouTube search failed: {e}" + Fore.RESET)
+                
+                # Return ONLY the video preview with embed
+                if top_video:
+                    # Extract video ID from URL for embed
+                    video_id = top_video.get('video_id', '')
+                    
+                    # Create embedded video response with minimal text
+                    bot_response = f"""**{top_video['title']}**
+📺 {top_video['channel']} • {top_video['duration']} • {top_video['views_text']}
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+[Open in YouTube]({top_video['url']})"""
+                    
+                    print(Fore.GREEN + f"✓ Video embed created for: {top_video['title']}" + Fore.RESET)
+                else:
+                    # Fallback if YouTube search fails
+                    bot_response = "I couldn't find a relevant video for your request. Try searching YouTube directly, or I can help explain concepts from your study materials. What would you like to know more about?"
+                    print(Fore.YELLOW + "⚠️  No video found" + Fore.RESET)
+            
+            elif "book_calendar" in route_classification or "calendar" in route_classification:
+                # Handle calendar booking requests
+                print(Fore.CYAN + "📅 Using calendar booking handler..." + Fore.RESET)
+                
+                try:
+                    # Get chapter context to enhance the calendar event
+                    chapter_context = ""
+                    if active_chapter:
+                        if isinstance(active_chapter, dict):
+                            chapter_name = active_chapter.get("name", "")
+                        else:
+                            chapter_name = active_chapter.name if hasattr(active_chapter, 'name') else ""
+                        
+                        if chapter_name:
+                            chapter_context = f" for {chapter_name}"
+                    
+                    # Enhance message with study context if not already detailed
+                    enhanced_message = message
+                    if "study" not in message.lower() and chapter_context:
+                        # Add study context to generic booking requests
+                        enhanced_message = f"{message} (Study session{chapter_context})"
+                    
+                    print(Fore.YELLOW + f"📅 Creating calendar event: '{enhanced_message}'" + Fore.RESET)
+                    
+                    # Create the calendar event
+                    file_path, status_msg, preview = create_event_with_ai(enhanced_message)
+                    
+                    # Store calendar data for return
+                    calendar_file_path = file_path
+                    calendar_status_msg = status_msg
+                    calendar_preview_text = preview
+                    
+                    if file_path:
+                        # Success! Generate a friendly response with event details
+                        bot_response = f"""✅ **Calendar Event Created!**
+
+{status_msg}
+
+📥 **The .ics file is ready to download in the "📅 Quick Calendar Event" section in the left sidebar!**
+
+💡 Look for the "Download .ics File" button that just appeared above."""
+                        print(Fore.GREEN + f"✓ Calendar event created successfully, file: {file_path}" + Fore.RESET)
+                    else:
+                        # Failed to create event
+                        bot_response = f"""I tried to create a calendar event but encountered an issue:
+
+{status_msg}
+
+Would you like to try rephrasing your request? For example:
+- "Schedule a study session tomorrow at 3pm for 2 hours"
+- "Book time on Friday 15:00-16:00 to study this topic"
+- "Create an exam reminder for next Monday at 9am"
+
+Or you can use the **"📅 Quick Calendar Event"** section in the left sidebar!"""
+                        print(Fore.YELLOW + f"⚠️  Calendar event creation failed" + Fore.RESET)
+                        
+                except Exception as e:
+                    print(Fore.RED + f"Error in calendar booking: {e}" + Fore.RESET)
+                    import traceback
+                    traceback.print_exc()
+                    bot_response = """I encountered an error while trying to create your calendar event. 
+
+You can try using the **"📅 Quick Calendar Event"** section in the left sidebar to create events directly!"""
+            
+            else:  # study_material
+                # Handle study material queries with full context (existing implementation)
+                print(Fore.CYAN + "📚 Using study material handler..." + Fore.RESET)
+            
             # Check if user has completed all chapters
-            if next_chapter is None and active_chapter:
+            if next_chapter is None and active_chapter and "study_material" in route_classification:
                 # User has completed all chapters!
                 user_preference = user_state.get("study_buddy_preference", buddy_pref if buddy_pref else "friendly and supportive")
                 study_buddy_name = user_state.get("study_buddy_name", "Study Buddy")
@@ -1319,7 +1559,13 @@ def send_message(message, history, buddy_pref, username):
                 if sub_topics and len(sub_topics) > 0:
                     last_subtopic = sub_topics[-1]
                     sub_topic = last_subtopic.get("sub_topic", "Unknown") if isinstance(last_subtopic, dict) else last_subtopic.sub_topic
-                    study_material = last_subtopic.get("study_material", "No material available.") if isinstance(last_subtopic, dict) else last_subtopic.study_material
+                    
+                    # Try to get display_markdown first (contains images), fallback to study_material
+                    if isinstance(last_subtopic, dict):
+                        study_material = last_subtopic.get("display_markdown") or last_subtopic.get("study_material", "No material available.")
+                    else:
+                        study_material = getattr(last_subtopic, 'display_markdown', None) or getattr(last_subtopic, 'study_material', "No material available.")
+                    
                     list_of_quizzes = last_subtopic.get("quizzes", []) if isinstance(last_subtopic, dict) else last_subtopic.quizzes
                 else:
                     sub_topic = "General"
@@ -1354,9 +1600,9 @@ Previous study material for reference:
                     user_preference=user_preference
                 )
                 
-            elif not active_chapter:
+            elif not active_chapter and "study_material" in route_classification:
                 bot_response = "Please select a chapter to start studying first!"
-            else:
+            elif "study_material" in route_classification:
                 # Get chapter details
                 chapter_name = active_chapter.get("name", "Unknown Chapter") if isinstance(active_chapter, dict) else active_chapter.name
                 
@@ -1371,7 +1617,13 @@ Previous study material for reference:
                     # Get first subtopic details (could be extended to track current active subtopic)
                     first_subtopic = sub_topics[0]
                     sub_topic = first_subtopic.get("sub_topic", "Unknown") if isinstance(first_subtopic, dict) else first_subtopic.sub_topic
-                    study_material = first_subtopic.get("study_material", "No material available.") if isinstance(first_subtopic, dict) else first_subtopic.study_material
+                    
+                    # Try to get display_markdown first (contains images), fallback to study_material
+                    if isinstance(first_subtopic, dict):
+                        study_material = first_subtopic.get("display_markdown") or first_subtopic.get("study_material", "No material available.")
+                    else:
+                        study_material = getattr(first_subtopic, 'display_markdown', None) or getattr(first_subtopic, 'study_material', "No material available.")
+                    
                     list_of_quizzes = first_subtopic.get("quizzes", []) if isinstance(first_subtopic, dict) else first_subtopic.quizzes
                 
                 # Get study buddy preference
@@ -1447,7 +1699,7 @@ Previous study material for reference:
     
     history.append({"role": "user", "content": message})
     history.append({"role": "assistant", "content": bot_response})
-    return "", history
+    return "", history, calendar_file_path, calendar_status_msg, calendar_preview_text
 
 
 def submit_feedback(feedback_text):
