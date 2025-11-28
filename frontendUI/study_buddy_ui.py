@@ -1369,32 +1369,41 @@ Response:"""
                 # Handle supplement requests (external resources, videos, etc.)
                 print(Fore.CYAN + "🔗 Using supplement handler with YouTube search..." + Fore.RESET)
                 
-                # Extract keywords from user query for YouTube search
-                # Remove common filler phrases to get clean keywords
-                search_query = message.lower()
+                # Extract keywords from user query using LLM for better accuracy
+                print(Fore.YELLOW + "🤖 Extracting keywords with LLM..." + Fore.RESET)
+                keyword_extraction_prompt = f"""Extract the core search keywords from this user request for a YouTube search. 
+Return ONLY the essential keywords or topic phrase, nothing else. Remove filler words like "find me", "show me", "video about", etc.
+
+User request: "{message}"
+
+Essential keywords:"""
                 
-                # List of common filler phrases to remove
-                filler_phrases = [
-                    "can you find me a video", "can you find a video", "find me a video",
-                    "show me a video", "show me videos", "find videos",
-                    "can you show me", "show me", "find me",
-                    "i want to watch", "i want to see", "i'd like to watch", "i'd like to see",
-                    "could you find", "could you show", "please find", "please show",
-                    "search for a video", "search for videos", "get me a video",
-                    "look for a video", "look for videos",
-                    "about", "on", "regarding", "related to", "for"
-                ]
-                
-                # Remove filler phrases
-                for phrase in filler_phrases:
-                    search_query = search_query.replace(phrase, " ")
-                
-                # Clean up extra whitespace
-                search_query = " ".join(search_query.split()).strip()
-                
-                # If query is too short after cleaning, use original message
-                if len(search_query) < 3:
-                    search_query = message
+                try:
+                    response = inference_call(None, keyword_extraction_prompt)
+                    output_d = response.json()
+                    search_query = output_d['choices'][0]["message"]["content"].strip()
+                    # Remove quotes if LLM added them
+                    search_query = search_query.strip('"').strip("'").strip()
+                    print(Fore.GREEN + f"✓ Extracted keywords: '{search_query}'" + Fore.RESET)
+                except Exception as e:
+                    # Fallback to simple extraction if LLM fails
+                    print(Fore.YELLOW + f"⚠️  LLM extraction failed, using fallback: {e}" + Fore.RESET)
+                    search_query = message.lower()
+                    filler_phrases = [
+                        "can you find me a video", "can you find a video", "find me a video",
+                        "show me a video", "show me videos", "find videos",
+                        "can you show me", "show me", "find me",
+                        "i want to watch", "i want to see", "i'd like to watch", "i'd like to see",
+                        "could you find", "could you show", "please find", "please show",
+                        "search for a video", "search for videos", "get me a video",
+                        "look for a video", "look for videos",
+                        "about", "on", "regarding", "related to", "for"
+                    ]
+                    for phrase in filler_phrases:
+                        search_query = search_query.replace(phrase, " ")
+                    search_query = " ".join(search_query.split()).strip()
+                    if len(search_query) < 3:
+                        search_query = message
                 
                 # Search YouTube with clean keywords
                 print(Fore.YELLOW + f"🔍 Searching YouTube for keywords: '{search_query}'" + Fore.RESET)
