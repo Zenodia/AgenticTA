@@ -43,7 +43,7 @@ RUN pip install -U \
     fastmcp \
     colorama \
     markdown \
-    gradio \
+    "gradio>=4.0.0,<6.0.0" \
     nv-ingest==25.9.0 \
     nv-ingest-api==25.9.0 \
     nv-ingest-client==25.9.0 \
